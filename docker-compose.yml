@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  edac:
+    build: .
+    ports:
+      - "8000:8000"
+      - "9090:9090"
+    environment:
+      - EDAC_HOST=0.0.0.0
+      - EDAC_PORT=8000
+      - EDAC_LOG_LEVEL=info
+      - EDAC_OLLAMA_BASE_URL=http://ollama:11434
+      - EDAC_DATABASE_URL=sqlite+aiosqlite:///app/data/edac.db
+      - EDAC_METRICS_ENABLED=true
+      - EDAC_METRICS_PORT=9090
+      - EDAC_API_KEY=${EDAC_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./skills:/app/skills
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

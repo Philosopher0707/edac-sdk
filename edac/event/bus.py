@@ -125,9 +125,11 @@ class Subscription:
         if self.event_types and event.event_type not in self.event_types:
             return False
         
-        # EventPriority filter
+        # EventPriority filter: lower numeric value = higher priority
+        # We want to RECEIVE events at or above our filter threshold
+        # e.g. if filter=HIGH(-50), we should receive CRITICAL(-100) and HIGH(-50)
         if self.priority_filter is not None:
-            if event.priority < self.priority_filter:
+            if event.priority.value > self.priority_filter.value:
                 return False
         
         # Source filter
