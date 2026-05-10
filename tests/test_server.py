@@ -232,3 +232,51 @@ class TestTaskStore:
             assert count == 2
         finally:
             await store.close()
+
+
+class TestServerAuth:
+    def test_rbac_viewer_cannot_submit_task(self):
+        from edac.server.auth import Role
+        cfg = ServerConfig(
+            database_url="sqlite+aiosqlite:///:memory:",
+            api_key="admin-key",
+        )
+        app = create_app(config=cfg)
+        with TestClient(app) as client:
+            app.state.auth.register("viewer-key", Role.VIEWER, name="viewer")
+            resp = client.post(
+                "/tasks",
+                json={"goal": "Build API", "pattern": "pipeline", "agents": []},
+                headers={"x-api-key": "viewer-key"},
+            )
+            assert resp.status_code == 403
+            assert resp.json()["detail"] == "Permission denied"
+
+    def test_rbac_admin_can_submit_task(self):
+        from edac.server.auth import Role
+        cfg = ServerConfig(
+            database_url="sqlite+aiosqlite:///:memory:",
+            api_key="admin-key",
+        )
+        app = create_app(config=cfg)
+        with TestClient(app) as client:
+            app.state.auth.register("admin-key", Role.ADMIN, name="admin")
+            resp = client.post(
+                "/tasks",
+                json={"goal": "Build API", "pattern": "pipeline", "agents": []},
+                headers={"x-api-key": "admin-key"},
+            )
+            assert resp.status_code == 200
+
+    def test_rbac_unauthenticated_blocked(self):
+        cfg = ServerConfig(
+            database_url="sqlite+aiosqlite:///:memory:",
+            api_key="admin-key",
+        )
+        app = create_app(config=cfg)
+        with TestClient(app) as client:
+            resp = client.post(
+                "/tasks",
+                json={"goal": "Build API", "pattern": "pipeline", "agents": []},
+            )
+            assert resp.status_code == 401
