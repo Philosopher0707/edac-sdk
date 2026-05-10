@@ -15,8 +15,18 @@ class TestServerHealth:
             response = client.get("/health")
             assert response.status_code == 200
             data = response.json()
-            assert data["status"] == "healthy"
+            assert data["status"] in ("healthy", "degraded")
             assert data["version"] == "0.2.0"
+            assert "components" in data
+            assert "database" in data["components"]
+            assert "worker" in data["components"]
+
+    def test_health_has_request_id(self):
+        app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))
+        with TestClient(app) as client:
+            response = client.get("/health", headers={"x-request-id": "abc123"})
+            assert response.status_code == 200
+            assert response.headers.get("x-request-id") == "abc123"
 
 
 class TestServerTasks:
@@ -66,6 +76,17 @@ class TestServerTasks:
             })
             assert response.status_code == 422
 
+    def test_get_task_events(self):
+        app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))
+        with TestClient(app) as client:
+            # Submit and get task
+            resp = client.post("/tasks", json={"goal": "G1", "pattern": "pipeline", "agents": []})
+            task_id = resp.json()["id"]
+
+            response = client.get(f"/tasks/{task_id}/events")
+            assert response.status_code == 200
+            assert isinstance(response.json(), list)
+
 
 class TestServerAgents:
     def test_list_agents(self):
@@ -85,6 +106,25 @@ class TestServerMetrics:
             assert response.status_code == 200
             text = response.text
             assert "tasks_submitted" in text or text == ""
+            assert response.headers["content-type"].startswith("text/plain")
+
+
+class TestServerDLQ:
+    def test_dlq_empty(self):
+        app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))
+        with TestClient(app) as client:
+            response = client.get("/dlq")
+            assert response.status_code == 200
+            data = response.json()
+            assert data == []
+
+
+class TestServerRateLimiting:
+    def test_rate_limit_not_triggered(self):
+        app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))
+        with TestClient(app) as client:
+            response = client.get("/health")
+            assert response.status_code == 200
 
 
 class TestTaskStore:
@@ -159,5 +199,36 @@ class TestTaskStore:
             assert len(events) == 2
             assert events[0]["event_type"] == "task.started"
             assert events[1]["event_type"] == "task.completed"
+        finally:
+            await store.close()
+
+    @pytest.mark.asyncio
+    async def test_dlq(self):
+        store = TaskStore(database_url="sqlite+aiosqlite:///:memory:")
+        await store.connect()
+        try:
+            await store.create_task(task_id="t1", goal="Build API")
+            await store.update_task_status("t1", status="failed", error="boom")
+
+            moved = await store.move_to_dlq("t1", max_retries=0)
+            assert moved is True
+
+            dlq = await store.list_dlq()
+            assert len(dlq) == 1
+            assert dlq[0]["task_id"] == "t1"
+            assert dlq[0]["error"] == "boom"
+        finally:
+            await store.close()
+
+    @pytest.mark.asyncio
+    async def test_increment_retry(self):
+        store = TaskStore(database_url="sqlite+aiosqlite:///:memory:")
+        await store.connect()
+        try:
+            await store.create_task(task_id="t1", goal="Build API")
+            count = await store.increment_retry("t1")
+            assert count == 1
+            count = await store.increment_retry("t1")
+            assert count == 2
         finally:
             await store.close()

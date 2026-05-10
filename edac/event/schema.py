@@ -492,21 +492,19 @@ def create_event(
     event_type: EventType,
     source: str,
     topic: str,
-    correlation_id: uuid.UUID,
+    correlation_id: Optional[uuid.UUID] = None,
     payload: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> Event:
     """Convenience factory for creating events.
 
-    correlation_id is REQUIRED to ensure distributed tracing works correctly.
-    Use uuid.uuid4() to create a new session, or pass an existing correlation_id
-    to link events to the same session.
+    correlation_id defaults to a new UUID if not provided.
     """
     return Event(
         event_type=event_type,
         source=source,
         topic=topic,
-        correlation_id=correlation_id,
+        correlation_id=correlation_id or uuid.uuid4(),
         payload=payload or {},
         **kwargs,
     )

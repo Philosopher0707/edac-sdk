@@ -59,11 +59,22 @@ class ServerConfig(BaseSettings):
     task_queue_maxsize: int = 1000
     task_timeout: float = 300.0
     worker_count: int = 2
+    queue_backend: str = "asyncio"  # asyncio | redis
+
+    # Resilience
+    retry_max_attempts: int = 3
+    retry_base_delay: float = 1.0
+    retry_max_delay: float = 60.0
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_recovery: float = 30.0
+    rate_limit_capacity: float = 100.0
+    rate_limit_refill: float = 10.0
 
     # Observability
     metrics_enabled: bool = True
     tracing_enabled: bool = True
     metrics_port: int = 9090
+    audit_logging: bool = True
 
     # Paths
     data_dir: Path = Path("./data")

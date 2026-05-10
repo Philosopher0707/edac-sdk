@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from edac.server.executor import AgentExecutor
+from edac.server.queue import AsyncioTaskQueue, TaskQueue, create_queue
+from edac.server.retry import retry
 from edac.server.store import TaskStore
 
 logger = logging.getLogger("edac.server.worker")
@@ -34,28 +36,48 @@ class TaskWorker:
         store: TaskStore,
         executor: AgentExecutor,
         maxsize: int = 1000,
+        backend: str = "asyncio",
+        max_retries: int = 3,
+        retry_base_delay: float = 1.0,
+        retry_max_delay: float = 60.0,
     ):
         self.store = store
         self.executor = executor
-        self.queue: asyncio.Queue[QueuedTask] = asyncio.Queue(maxsize=maxsize)
+        self.queue: TaskQueue[QueuedTask] = create_queue(maxsize=maxsize, backend=backend)
+        self.max_retries = max_retries
+        self.retry_base_delay = retry_base_delay
+        self.retry_max_delay = retry_max_delay
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        self._current_task: Optional[QueuedTask] = None
+        self._shutdown_event = asyncio.Event()
 
     async def start(self) -> None:
         """Start the worker loop."""
         self._running = True
+        self._shutdown_event.clear()
         self._task = asyncio.create_task(self._worker_loop(), name="task_worker")
         logger.info("TaskWorker started")
 
     async def stop(self) -> None:
-        """Stop the worker loop."""
+        """Graceful shutdown — finish current task, drain queue."""
+        logger.info("TaskWorker shutting down gracefully...")
         self._running = False
+
+        # Wait for queue to drain (with timeout)
+        try:
+            await asyncio.wait_for(self.queue.join(), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.warning("TaskWorker shutdown timeout — some tasks may be lost")
+
+        # Cancel worker loop
         if self._task:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
+
         logger.info("TaskWorker stopped")
 
     async def submit(self, task: QueuedTask) -> None:
@@ -71,8 +93,9 @@ class TaskWorker:
             except asyncio.TimeoutError:
                 continue
 
+            self._current_task = task
             try:
-                await self._process(task)
+                await self._process_with_retry(task)
             except Exception as e:
                 logger.exception(f"Failed to process task {task.task_id}: {e}")
                 await self.store.update_task_status(
@@ -80,8 +103,35 @@ class TaskWorker:
                     status="failed",
                     error=str(e),
                 )
+                moved = await self.store.move_to_dlq(task.task_id, max_retries=self.max_retries)
+                if moved:
+                    logger.warning(f"Task {task.task_id} moved to DLQ")
             finally:
+                self._current_task = None
                 self.queue.task_done()
+
+    async def _process_with_retry(self, task: QueuedTask) -> None:
+        """Process with retry and DLQ fallback."""
+        last_err: Optional[Exception] = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                return await self._process(task)
+            except Exception as e:
+                last_err = e
+                if attempt >= self.max_retries:
+                    break
+                delay = min(
+                    self.retry_base_delay * (2 ** (attempt - 1)),
+                    self.retry_max_delay,
+                )
+                logger.warning(
+                    f"Task {task.task_id} attempt {attempt} failed: {e}. "
+                    f"Retrying in {delay:.1f}s..."
+                )
+                await asyncio.sleep(delay)
+
+        if last_err:
+            raise last_err
 
     async def _process(self, task: QueuedTask) -> None:
         """Process a single task."""

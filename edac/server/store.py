@@ -64,6 +64,7 @@ class TaskStore:
                 agents TEXT NOT NULL DEFAULT '[]',
                 result TEXT,
                 error TEXT,
+                retry_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT '',
                 updated_at TEXT NOT NULL DEFAULT ''
             )
@@ -80,6 +81,20 @@ class TaskStore:
         """)
         await self._db.execute("""
             CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id)
+        """)
+        # Dead Letter Queue for failed tasks that exhausted retries
+        await self._db.execute("""
+            CREATE TABLE IF NOT EXISTS dead_letter (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL UNIQUE,
+                goal TEXT NOT NULL DEFAULT '',
+                pattern TEXT NOT NULL DEFAULT 'pipeline',
+                agents TEXT NOT NULL DEFAULT '[]',
+                error TEXT,
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                original_created_at TEXT NOT NULL DEFAULT '',
+                failed_at TEXT NOT NULL DEFAULT ''
+            )
         """)
         await self._db.commit()
 
@@ -169,6 +184,71 @@ class TaskStore:
                     "event_type": row["event_type"],
                     "payload": json.loads(row["payload"]),
                     "timestamp": row["timestamp"],
+                }
+                for row in rows
+            ]
+
+    async def increment_retry(self, task_id: str) -> int:
+        """Increment retry count, return new value."""
+        await self._db.execute(
+            "UPDATE tasks SET retry_count = retry_count + 1 WHERE id = ?",
+            (task_id,),
+        )
+        await self._db.commit()
+        async with self._db.execute(
+            "SELECT retry_count FROM tasks WHERE id = ?", (task_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row["retry_count"] if row else 0
+
+    async def move_to_dlq(self, task_id: str, max_retries: int = 3) -> bool:
+        """Move a failed task to DLQ if retries exhausted."""
+        task = await self.get_task(task_id)
+        if task is None:
+            return False
+        retry_count = await self.increment_retry(task_id)
+        if retry_count >= max_retries:
+            now = datetime.now(timezone.utc).isoformat()
+            await self._db.execute(
+                """
+                INSERT OR REPLACE INTO dead_letter
+                (task_id, goal, pattern, agents, error, retry_count, original_created_at, failed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    task.goal,
+                    task.pattern,
+                    json.dumps(task.agents),
+                    task.error,
+                    retry_count,
+                    task.created_at,
+                    now,
+                ),
+            )
+            await self._db.execute(
+                "UPDATE tasks SET status = 'dead_letter' WHERE id = ?", (task_id,)
+            )
+            await self._db.commit()
+            return True
+        return False
+
+    async def list_dlq(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        async with self._db.execute(
+            "SELECT * FROM dead_letter ORDER BY failed_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row["id"],
+                    "task_id": row["task_id"],
+                    "goal": row["goal"],
+                    "pattern": row["pattern"],
+                    "agents": json.loads(row["agents"]),
+                    "error": row["error"],
+                    "retry_count": row["retry_count"],
+                    "failed_at": row["failed_at"],
                 }
                 for row in rows
             ]
