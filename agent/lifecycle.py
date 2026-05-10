@@ -42,6 +42,7 @@ class AgentConfig:
     resource_limits: Dict[str, Any] = field(default_factory=dict)
     sandbox: bool = False
     parent_agent_id: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 # ──────────────────────────────────────────────────────────────
