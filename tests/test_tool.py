@@ -3,11 +3,12 @@
 import asyncio
 import tempfile
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from edac.tool.registry import ToolRegistry, ToolSpec, ToolNotFound, ToolTimeout
-from edac.tool.mcp import MCPClient
+from edac.tool.mcp import MCPClient, MCPConnection
 from edac.tool.skill import SkillLoader, Skill
 from edac.tool.sandbox import Sandbox, SandboxConfig, SandboxPool
 
@@ -67,14 +68,71 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_connect_stdio(self):
         client = MCPClient(ToolRegistry())
-        conn = await client.connect_stdio("test", "python", ["-m", "mcp.server"])
-        assert conn.name == "test"
-        assert conn.transport == "stdio"
+        # Mock the MCP SDK stdio transport and session
+        mock_read = AsyncMock()
+        mock_write = AsyncMock()
+        mock_transport = AsyncMock()
+        mock_transport.__aenter__ = AsyncMock(return_value=(mock_read, mock_write))
+        mock_transport.__aexit__ = AsyncMock(return_value=False)
 
-    def test_disconnect(self):
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session.initialize = AsyncMock()
+
+        with patch("edac.tool.mcp.stdio_client", return_value=mock_transport):
+            with patch("edac.tool.mcp.ClientSession", return_value=mock_session):
+                conn = await client.connect_stdio("test", "python", ["-m", "mcp.server"])
+                assert conn.name == "test"
+                assert conn.transport == "stdio"
+                mock_session.initialize.assert_awaited_once()
+
+        await client.disconnect("test")
+
+    @pytest.mark.asyncio
+    async def test_disconnect_noop(self):
         client = MCPClient(ToolRegistry())
         # no-op if not connected
-        client.disconnect("missing")
+        await client.disconnect("missing")
+
+    @pytest.mark.asyncio
+    async def test_discover_tools(self):
+        client = MCPClient(ToolRegistry())
+        mock_tool = MagicMock()
+        mock_tool.name = "fetch"
+        mock_tool.description = "Fetch URL"
+        mock_tool.inputSchema = {"type": "object"}
+
+        mock_session = AsyncMock()
+        mock_session.list_tools = AsyncMock(return_value=MagicMock(tools=[mock_tool]))
+        mock_session.call_tool = AsyncMock(return_value={"content": "ok"})
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session.initialize = AsyncMock()
+
+        mock_transport = AsyncMock()
+        mock_transport.__aenter__ = AsyncMock(return_value=(AsyncMock(), AsyncMock()))
+        mock_transport.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("edac.tool.mcp.stdio_client", return_value=mock_transport):
+            with patch("edac.tool.mcp.ClientSession", return_value=mock_session):
+                await client.connect_stdio("test", "python", ["-c", "pass"])
+                specs = await client.discover_tools("test")
+                assert len(specs) == 1
+                assert specs[0].name == "fetch"
+                assert client.registry.has("fetch")
+
+    @pytest.mark.asyncio
+    async def test_call_tool(self):
+        client = MCPClient(ToolRegistry())
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(return_value={"content": "done"})
+        client._sessions["test"] = mock_session
+        client._connections["test"] = MCPConnection(name="test", endpoint="cmd", transport="stdio")
+
+        result = await client.call_tool("test", "echo", {"msg": "hi"})
+        assert result == {"content": "done"}
+        mock_session.call_tool.assert_awaited_once_with("echo", arguments={"msg": "hi"})
 
 
 class TestSkillLoader:
