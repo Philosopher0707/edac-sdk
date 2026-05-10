@@ -58,6 +58,12 @@ async def main():
                         "role": "orchestrator",
                         "task": "Break goal into subtasks",
                         "model": "claude-opus",
+                        "system_prompt": (
+                            "You are a senior software architect. Your job is to break a high-level goal "
+                            "into concrete, actionable subtasks. Each subtask must have a clear deliverable, "
+                            "estimated effort, and assigned role (frontend, backend, database, devops). "
+                            "Return a JSON array of subtasks."
+                        ),
                     },
                     {
                         "name": "coder",
@@ -66,12 +72,22 @@ async def main():
                         "model": "claude-sonnet",
                         "skills": ["python-refactor"],
                         "sandbox": True,
+                        "system_prompt": (
+                            "You are a senior Python engineer. Write clean, type-annotated, testable code. "
+                            "Follow PEP 8, use asyncio where appropriate, include docstrings, and handle errors. "
+                            "Return only the code files with file paths as comments."
+                        ),
                     },
                     {
                         "name": "reviewer",
                         "role": "critic",
                         "task": "Review code quality",
                         "model": "claude-haiku",
+                        "system_prompt": (
+                            "You are a code reviewer. Check for: type safety, error handling, test coverage, "
+                            "naming clarity, PEP 8 compliance, async correctness, and security issues. "
+                            "Give a score 1-10 and list specific fixes needed. Be concise."
+                        ),
                     },
                 ],
                 max_parallel=3,

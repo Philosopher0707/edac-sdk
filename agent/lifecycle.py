@@ -39,6 +39,7 @@ class AgentConfig:
     restart_window_seconds: float = 60.0
     heartbeat_interval: float = 5.0
     heartbeat_timeout: float = 15.0
+    system_prompt: Optional[str] = None
     resource_limits: Dict[str, Any] = field(default_factory=dict)
     sandbox: bool = False
     parent_agent_id: Optional[str] = None
