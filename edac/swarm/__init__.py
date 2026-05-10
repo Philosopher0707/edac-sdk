@@ -25,7 +25,7 @@ from edac.agent.lifecycle import AgentConfig
 from edac.agent.runtime import AgentRuntime
 from edac.event.bus import EventBus
 from edac.event.schema import Event, EventType, create_event
-from edac.plan.dag import PlanDAG, Step
+from edac.plan.dag import PlanDAG, Step, StepStatus
 from edac.plan.engine import PlanEngine
 
 logger = logging.getLogger("edac.swarm")
@@ -113,7 +113,7 @@ class Swarm:
         for i, cfg in enumerate(self.agents):
             step_id = f"step-{i}"
             step = plan.get_step(step_id)
-            step.status = "in_progress"
+            step.status = StepStatus.IN_PROGRESS
 
             await self.bus.emit(
                 create_event(
@@ -130,7 +130,7 @@ class Swarm:
             context = {"previous_result": result, **context}
             self._results[cfg["name"]] = result
 
-            step.status = "completed"
+            step.status = StepStatus.COMPLETED
             await self.bus.emit(
                 create_event(
                     EventType.PLAN_STEP_COMPLETE,

@@ -94,9 +94,9 @@ class ContextManager:
 
         # Add conversation history from window
         window = self.get_window(agent_id)
-        for role, text in window.entries:
-            chat_role = "user" if role == "user" else "assistant"
-            messages.append(ChatMessage(role=chat_role, content=text))
+        for entry in window.get_window():
+            chat_role = "user" if entry.role == "user" else "assistant"
+            messages.append(ChatMessage(role=chat_role, content=entry.content))
 
         messages.append(ChatMessage(role="user", content=prompt))
 

@@ -161,6 +161,15 @@ class OpenAIProvider(ModelProvider):
                     usage=usage,
                 )
 
+    async def list_models(self) -> List[str]:
+        """Return available OpenAI models."""
+        return [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "o3-mini",
+        ]
+
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()

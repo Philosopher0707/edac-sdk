@@ -170,6 +170,27 @@ class TestEventBus:
             assert result is False
 
     @pytest.mark.asyncio
+    async def test_concurrent_emit_respects_max_depth(self):
+        bus = EventBus(max_queue_depth=5)
+        async with bus:
+            # Slow handler so queue backs up
+            handler_done = asyncio.Event()
+            async def slow_handler(event):
+                await handler_done.wait()
+                return None
+            bus.subscribe(slow_handler, topics=["test"])
+
+            events = [
+                create_event(EventType.SYSTEM_LOG, "system:s", "test", payload={}, priority=EventPriority.NORMAL)
+                for _ in range(20)
+            ]
+            results = await asyncio.gather(*[bus.emit(e) for e in events])
+            accepted = sum(results)
+            # With serialized backpressure, no more than max_queue_depth + 1 should be accepted
+            assert accepted <= 6, f"Accepted {accepted} events but max_queue_depth is 5"
+            handler_done.set()
+
+    @pytest.mark.asyncio
     async def test_stream(self):
         bus = EventBus()
         async with bus:

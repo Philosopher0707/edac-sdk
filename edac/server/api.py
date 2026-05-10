@@ -265,10 +265,10 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     # ── Routes ──
 
     @app.post("/tasks", response_model=TaskResponse)
-    async def submit_task(req: SubmitTaskRequest) -> TaskResponse:
+    async def submit_task(req: SubmitTaskRequest, request: Request) -> TaskResponse:
         """Submit a new multi-agent task."""
         # RBAC check
-        user = getattr(getattr(Request, "state", None), "user", None)
+        user = getattr(request.state, "user", None)
         if user and not app.state.auth.is_allowed(user, ACTION_SUBMIT_TASK):
             log_audit(ACTION_SUBMIT_TASK, "/tasks", "denied", user=user.name)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
@@ -304,12 +304,13 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
     @app.get("/tasks")
     async def list_tasks(
+        request: Request,
         status: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> List[TaskResponse]:
         """List tasks."""
-        user = getattr(getattr(Request, "state", None), "user", None)
+        user = getattr(request.state, "user", None)
         if user and not app.state.auth.is_allowed(user, ACTION_LIST_TASKS):
             log_audit(ACTION_LIST_TASKS, "/tasks", "denied", user=user.name)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
@@ -320,9 +321,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         return [_task_to_response(r) for r in records]
 
     @app.get("/tasks/{task_id}", response_model=TaskResponse)
-    async def get_task(task_id: str) -> TaskResponse:
+    async def get_task(task_id: str, request: Request) -> TaskResponse:
         """Get a task by id."""
-        user = getattr(getattr(Request, "state", None), "user", None)
+        user = getattr(request.state, "user", None)
         if user and not app.state.auth.is_allowed(user, ACTION_GET_TASK):
             log_audit(ACTION_GET_TASK, f"/tasks/{task_id}", "denied", user=user.name)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
@@ -335,9 +336,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         return _task_to_response(record)
 
     @app.get("/tasks/{task_id}/events")
-    async def get_task_events(task_id: str) -> List[Dict[str, Any]]:
+    async def get_task_events(task_id: str, request: Request) -> List[Dict[str, Any]]:
         """Get events for a task."""
-        user = getattr(getattr(Request, "state", None), "user", None)
+        user = getattr(request.state, "user", None)
         if user and not app.state.auth.is_allowed(user, ACTION_GET_EVENTS):
             log_audit(ACTION_GET_EVENTS, f"/tasks/{task_id}/events", "denied", user=user.name)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
@@ -364,9 +365,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             app.state.websockets.get(task_id, []).remove(websocket)
 
     @app.get("/agents")
-    async def list_agents() -> List[AgentInfo]:
+    async def list_agents(request: Request) -> List[AgentInfo]:
         """List active agents."""
-        user = getattr(getattr(Request, "state", None), "user", None)
+        user = getattr(request.state, "user", None)
         if user and not app.state.auth.is_allowed(user, ACTION_LIST_AGENTS):
             log_audit(ACTION_LIST_AGENTS, "/agents", "denied", user=user.name)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
@@ -430,9 +431,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         )
 
     @app.get("/metrics", response_class=PlainTextResponse)
-    async def metrics() -> str:
+    async def metrics(request: Request) -> str:
         """Prometheus-compatible metrics."""
-        user = getattr(getattr(Request, "state", None), "user", None)
+        user = getattr(request.state, "user", None)
         if user and not app.state.auth.is_allowed(user, ACTION_GET_METRICS):
             log_audit(ACTION_GET_METRICS, "/metrics", "denied", user=user.name)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")

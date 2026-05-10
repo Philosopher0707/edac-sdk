@@ -162,6 +162,14 @@ class AnthropicProvider(ModelProvider):
                     usage=usage,
                 )
 
+    async def list_models(self) -> List[str]:
+        """Return available Anthropic models."""
+        return [
+            "claude-opus-4-7",
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5",
+        ]
+
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()

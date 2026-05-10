@@ -168,6 +168,13 @@ class TestAnthropicProvider:
         assert converted[2]["role"] == "user"
 
     @pytest.mark.asyncio
+    async def test_list_models(self):
+        p = AnthropicProvider(api_key="test")
+        models = await p.list_models()
+        assert isinstance(models, list)
+        assert len(models) > 0
+
+    @pytest.mark.asyncio
     async def test_close(self):
         p = AnthropicProvider(api_key="test")
         await p.close()
@@ -199,6 +206,13 @@ class TestOpenAIProvider:
         assert converted[0]["role"] == "system"
         assert converted[1]["role"] == "user"
         assert converted[2]["role"] == "assistant"
+
+    @pytest.mark.asyncio
+    async def test_list_models(self):
+        p = OpenAIProvider(api_key="test")
+        models = await p.list_models()
+        assert isinstance(models, list)
+        assert len(models) > 0
 
     @pytest.mark.asyncio
     async def test_close(self):

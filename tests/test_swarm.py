@@ -122,3 +122,24 @@ class TestSwarmInvalidPattern:
         assert r.success is True
         assert r.artifacts == [{"x": 1}]
         assert r.events == []
+
+
+class TestSwarmStepStatus:
+    @pytest.mark.asyncio
+    async def test_pipeline_step_status_is_enum(self):
+        from edac.plan.dag import StepStatus
+        bus = EventBus()
+        async with bus:
+            async with AgentRuntime(bus) as runtime:
+                swarm = Swarm(
+                    bus=bus,
+                    runtime=runtime,
+                    pattern="pipeline",
+                    agents=[
+                        {"name": "a", "role": "worker"},
+                        {"name": "b", "role": "worker"},
+                    ],
+                )
+                result = await swarm.execute(goal="G")
+                for step in result.plan.list_steps():
+                    assert isinstance(step.status, StepStatus)

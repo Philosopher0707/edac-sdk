@@ -85,6 +85,8 @@ class PlanDAG:
                     for dep in step.dependencies:
                         if dep not in s.dependencies:
                             s.dependencies.append(dep)
+            # Validate rewiring did not introduce cycles
+            self._validate_deps(list(self._steps.values()))
             self._version += 1
         return step
 

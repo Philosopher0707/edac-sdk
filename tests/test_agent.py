@@ -181,6 +181,30 @@ class TestAgentRegistry:
         assert d["capabilities"] == ["coding"]
 
 
+class TestHealthMonitorConcurrency:
+    @pytest.mark.asyncio
+    async def test_on_unhealthy_may_modify_agents(self):
+        """on_unhealthy callback may unregister agent — must not crash iteration."""
+        monitor = HealthMonitor(check_interval=0.05)
+        cfg = AgentConfig(name="tester", heartbeat_timeout=0.01)
+        agent = AgentInstance(cfg)
+        agent.last_heartbeat = 0  # force expired
+
+        unregistered = []
+
+        async def on_unhealthy(a):
+            unregistered.append(a.agent_id)
+            monitor.unregister(a.agent_id)
+
+        monitor.on_unhealthy = on_unhealthy
+
+        async with monitor:
+            monitor.register(agent)
+            await asyncio.sleep(0.12)
+
+        assert len(unregistered) >= 1
+
+
 class TestAgentRuntime:
     @pytest.mark.asyncio
     async def test_runtime_lifecycle(self):

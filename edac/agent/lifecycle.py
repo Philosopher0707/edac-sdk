@@ -244,7 +244,7 @@ class HealthMonitor:
             await asyncio.sleep(self.check_interval)
             now = time.time()
             unhealthy = [
-                a for a in self._agents.values()
+                a for a in list(self._agents.values())
                 if not a.is_healthy(now)
             ]
             for agent in unhealthy:

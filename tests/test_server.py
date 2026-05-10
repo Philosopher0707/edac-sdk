@@ -280,3 +280,37 @@ class TestServerAuth:
                 json={"goal": "Build API", "pattern": "pipeline", "agents": []},
             )
             assert resp.status_code == 401
+
+
+class TestExecutorConfig:
+    def test_find_agent_config_from_context(self):
+        from edac.server.executor import AgentExecutor
+
+        executor = AgentExecutor(
+            bus=None,  # type: ignore
+            runtime=None,  # type: ignore
+            registry=None,  # type: ignore
+            ctx_manager=None,  # type: ignore
+        )
+        context = {
+            "agents": [
+                {"name": "planner", "model": "claude-sonnet", "provider": "anthropic"},
+                {"name": "coder", "model": "gpt-4o", "provider": "openai"},
+            ],
+            "goal": "Build API",
+        }
+        cfg = executor._find_agent_config("coder", context)
+        assert cfg["model"] == "gpt-4o"
+        assert cfg["provider"] == "openai"
+
+    def test_find_agent_config_fallback(self):
+        from edac.server.executor import AgentExecutor
+
+        executor = AgentExecutor(
+            bus=None,  # type: ignore
+            runtime=None,  # type: ignore
+            registry=None,  # type: ignore
+            ctx_manager=None,  # type: ignore
+        )
+        cfg = executor._find_agent_config("unknown", {"goal": "x"})
+        assert cfg == {"name": "unknown"}

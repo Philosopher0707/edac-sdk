@@ -87,7 +87,7 @@ class PlanEngine:
                     await self._replan(plan, mutator, reason="step_failure")
                     continue
                 else:
-                    await self._emit_plan_event(plan, EventType.PLAN_COMPLETE)
+                    await self._emit_plan_event(plan, EventType.PLAN_ABORT)
                     return plan
 
             # Find ready steps

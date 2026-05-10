@@ -58,6 +58,7 @@ class AgentExecutor:
         original_invoke = swarm._invoke_agent
 
         async def _real_invoke(name: str, agent_id: str, context: Dict[str, Any]) -> Any:
+            context.setdefault("agents", agents)
             return await self._call_llm(name, agent_id, context)
 
         swarm._invoke_agent = _real_invoke  # type: ignore[method-assign]

@@ -363,36 +363,37 @@ class EventBus:
         """
         if not self._running:
             raise RuntimeError("Event bus is not running")
-        
-        # Check backpressure
-        total_depth = sum(q.qsize() for q in self._queues.values())
-        
-        if total_depth >= self.max_queue_depth:
-            event_priority = event.priority
-            
-            # Drop low/normal priority events under backpressure
-            if event_priority in (EventPriority.LOW, EventPriority.NORMAL):
-                self._stats.events_dropped += 1
-                self._stats.backpressure_triggered += 1
+
+        async with self._lock:
+            # Check backpressure
+            total_depth = sum(q.qsize() for q in self._queues.values())
+
+            if total_depth >= self.max_queue_depth:
+                event_priority = event.priority
+
+                # Drop low/normal priority events under backpressure
+                if event_priority in (EventPriority.LOW, EventPriority.NORMAL):
+                    self._stats.events_dropped += 1
+                    self._stats.backpressure_triggered += 1
+                    logger.warning(
+                        f"Event dropped due to backpressure: {event.event_type} "
+                        f"(queue_depth={total_depth})"
+                    )
+                    return False
+
+                # Accept high/critical priority events even under backpressure
                 logger.warning(
-                    f"Event dropped due to backpressure: {event.event_type} "
-                    f"(queue_depth={total_depth})"
+                    f"Accepting high-priority event despite backpressure: "
+                    f"{event.event_type}"
                 )
-                return False
-            
-            # Accept high/critical priority events even under backpressure
-            logger.warning(
-                f"Accepting high-priority event despite backpressure: "
-                f"{event.event_type}"
-            )
-        
-        # Add to appropriate priority queue
-        priority = event.priority
-        await self._queues[priority].put(event)
-        
-        self._stats.events_emitted += 1
-        self._stats.queue_depth = total_depth + 1
-        self._stats.max_queue_depth = max(self._stats.max_queue_depth, total_depth + 1)
+
+            # Add to appropriate priority queue
+            priority = event.priority
+            await self._queues[priority].put(event)
+
+            self._stats.events_emitted += 1
+            self._stats.queue_depth = total_depth + 1
+            self._stats.max_queue_depth = max(self._stats.max_queue_depth, total_depth + 1)
         
         # Add to event log
         if self.enable_persistence:

@@ -96,3 +96,41 @@ class TestContextManager:
         stats = cm.get_stats()
         assert "budget" in stats
         assert "active_windows" in stats
+
+    @pytest.mark.asyncio
+    async def test_chat_includes_window_history(self):
+        from edac.model import ChatCompletion, ChatMessage, ModelRegistry, ModelProvider
+
+        class MockProvider(ModelProvider):
+            def __init__(self):
+                self.last_messages = []
+
+            @property
+            def name(self):
+                return "mock"
+
+            def is_available(self):
+                return True
+
+            async def chat(self, messages, **kwargs):
+                self.last_messages = messages
+                return ChatCompletion(content="ok", model="mock")
+
+            async def stream(self, messages, **kwargs):
+                pass
+
+            async def close(self):
+                pass
+
+        registry = ModelRegistry()
+        mock = MockProvider()
+        registry.register("mock", mock)
+        cm = ContextManager(registry=registry, config=ContextConfig(default_provider="mock"))
+        cm.add_to_window("a1", "user", "hello", tokens=1)
+        result = await cm.chat("a1", prompt="world", provider="mock")
+        assert result == "ok"
+        assert len(mock.last_messages) == 2  # history + prompt
+        assert mock.last_messages[0].role == "user"
+        assert mock.last_messages[0].content == "hello"
+        assert mock.last_messages[1].role == "user"
+        assert mock.last_messages[1].content == "world"

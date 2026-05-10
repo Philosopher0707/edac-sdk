@@ -71,6 +71,17 @@ class TestPlanDAG:
         assert "s2" not in s3.dependencies
         assert "s1" in s3.dependencies
 
+    def test_remove_step_validates_dag(self):
+        plan = PlanDAG(goal="test")
+        plan.add_step(Step(id="s1", description="d", action="a"))
+        plan.add_step(Step(id="s2", description="d", action="a", dependencies=["s1"]))
+        plan.add_step(Step(id="s3", description="d", action="a", dependencies=["s2"]))
+        plan.remove_step("s2")
+        # After valid remove, DAG should still have valid topological order
+        order = plan.topological_order()
+        assert "s1" in order
+        assert "s3" in order
+
     def test_clone(self):
         plan = PlanDAG(goal="test")
         plan.add_step(Step(id="s1", description="d", action="a"))
@@ -195,3 +206,27 @@ class TestPlanEngine:
             result = await engine.execute(plan, executor)
         assert result.has_failures
         assert "timed out" in (result.get_step("s1").error or "")
+
+    @pytest.mark.asyncio
+    async def test_permanent_failure_emits_abort(self):
+        bus = EventBus()
+        engine = PlanEngine(bus, PlanConfig(max_replans=0))
+
+        plan = PlanDAG(goal="test")
+        plan.add_step(Step(id="s1", description="bad step", action="a"))
+
+        async def executor(step):
+            raise ValueError("boom")
+
+        events = []
+        async def capture(event):
+            events.append(event.event_type.value)
+
+        async with bus:
+            bus.subscribe(capture, topics=["plan.events"])
+            result = await engine.execute(plan, executor)
+            await asyncio.sleep(0.1)  # let events propagate
+
+        assert result.has_failures
+        assert "plan.abort" in events
+        assert "plan.complete" not in events
