@@ -231,6 +231,13 @@ class PlanDAG:
             "completion_pct": self.completion_pct,
         }
 
+    def mark_complete(self) -> None:
+        """Mark all pending steps as completed."""
+        for s in self._steps.values():
+            if s.status == StepStatus.PENDING:
+                s.status = StepStatus.COMPLETED
+        self._version += 1
+
     def clone(self) -> PlanDAG:
         """Deep copy of the plan DAG."""
         new = PlanDAG(goal=self.goal)

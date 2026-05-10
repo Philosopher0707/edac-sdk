@@ -61,3 +61,7 @@ class ApprovalManager:
             if gate.is_triggered(action):
                 return gate.approve(approver)
         return False
+
+    @property
+    def gates(self) -> List[ApprovalGate]:
+        return list(self._gates)
