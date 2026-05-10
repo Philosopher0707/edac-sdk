@@ -314,3 +314,68 @@ class TestExecutorConfig:
         )
         cfg = executor._find_agent_config("unknown", {"goal": "x"})
         assert cfg == {"name": "unknown"}
+
+
+class TestExecutorCircuitBreaker:
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_opens_after_failures(self):
+        from edac.server.executor import AgentExecutor
+        from edac.server.circuit_breaker import CircuitBreaker
+        from edac.model import ChatCompletion, ChatMessage, ModelProvider, ModelRegistry
+        from edac.context.manager import ContextManager, ContextConfig
+
+        class FailingProvider(ModelProvider):
+            def __init__(self):
+                self.calls = 0
+
+            @property
+            def name(self):
+                return "fail"
+
+            def is_available(self):
+                return True
+
+            async def chat(self, messages, **kwargs):
+                self.calls += 1
+                raise RuntimeError("provider down")
+
+            async def stream(self, messages, **kwargs):
+                pass
+
+            async def close(self):
+                pass
+
+            async def list_models(self):
+                return []
+
+        registry = ModelRegistry()
+        fail = FailingProvider()
+        registry.register("fail", fail)
+        ctx = ContextManager(registry=registry, config=ContextConfig(default_provider="fail"))
+        cb = CircuitBreaker("fail", failure_threshold=2, recovery_timeout=60.0)
+        executor = AgentExecutor(
+            bus=None,  # type: ignore
+            runtime=None,  # type: ignore
+            registry=registry,
+            ctx_manager=ctx,
+            circuit_breakers={"fail": cb},
+        )
+
+        ctx = {"goal": "g", "agents": [{"name": "agent", "provider": "fail"}]}
+
+        # First call: provider fails, circuit records failure
+        r1 = await executor._call_llm("agent", "a1", ctx)
+        assert r1["status"] == "failed"
+        assert fail.calls == 1
+
+        # Second call: provider fails, circuit opens
+        r2 = await executor._call_llm("agent", "a1", ctx)
+        assert r2["status"] == "failed"
+        assert fail.calls == 2
+        assert cb.state.value == "open"
+
+        # Third call: circuit breaker open, no provider call
+        r3 = await executor._call_llm("agent", "a1", ctx)
+        assert r3["status"] == "failed"
+        assert "Circuit breaker open" in r3["error"]
+        assert fail.calls == 2  # no additional provider call

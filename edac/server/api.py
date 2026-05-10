@@ -35,6 +35,7 @@ from edac.model.ollama import OllamaProvider
 from edac.model.openai import OpenAIProvider
 from edac.observability.metrics import MetricsCollector
 from edac.server.audit import log_audit
+from edac.server.circuit_breaker import CircuitBreaker
 from edac.server.auth import (
     ACTION_GET_EVENTS,
     ACTION_GET_HEALTH,
@@ -50,7 +51,7 @@ from edac.server.circuit_breaker import CircuitBreaker
 from edac.server.config import ServerConfig
 from edac.server.executor import AgentExecutor
 from edac.server.rate_limiter import RateLimiter
-from edac.server.store import TaskStore
+from edac.server.store import TaskStore, create_store
 from edac.server.tracing import clear_request_id, get_request_id, set_request_id
 from edac.server.worker import QueuedTask, TaskWorker
 
@@ -107,7 +108,7 @@ async def lifespan(app: FastAPI):
     cfg: ServerConfig = app.state.config
 
     # Database
-    store = TaskStore(database_url=cfg.database_url)
+    store = create_store(database_url=cfg.database_url, pool_size=cfg.db_pool_size)
     await store.connect()
     app.state.store = store
 
@@ -148,8 +149,16 @@ async def lifespan(app: FastAPI):
     # Context manager
     ctx = ContextManager(registry=registry)
 
+    # Circuit breakers map for executor
+    circuit_breakers: Dict[str, CircuitBreaker] = {}
+    circuit_breakers["ollama"] = cb_ollama
+    if anthropic:
+        circuit_breakers["anthropic"] = app.state.cb_anthropic
+    if openai:
+        circuit_breakers["openai"] = app.state.cb_openai
+
     # Executor + worker
-    executor = AgentExecutor(bus, runtime, registry, ctx)
+    executor = AgentExecutor(bus, runtime, registry, ctx, circuit_breakers=circuit_breakers)
     worker = TaskWorker(
         store=store,
         executor=executor,

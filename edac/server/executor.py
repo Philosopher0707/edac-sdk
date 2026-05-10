@@ -15,6 +15,7 @@ from edac.agent.runtime import AgentRuntime
 from edac.context.manager import ContextManager
 from edac.event.bus import EventBus
 from edac.model import ModelRegistry
+from edac.server.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from edac.swarm import Swarm, SwarmResult
 
 logger = logging.getLogger("edac.server.executor")
@@ -29,11 +30,13 @@ class AgentExecutor:
         runtime: AgentRuntime,
         registry: ModelRegistry,
         ctx_manager: ContextManager,
+        circuit_breakers: Optional[Dict[str, CircuitBreaker]] = None,
     ):
         self.bus = bus
         self.runtime = runtime
         self.registry = registry
         self.ctx = ctx_manager
+        self._circuit_breakers = circuit_breakers or {}
 
     async def execute(
         self,
@@ -100,20 +103,39 @@ class AgentExecutor:
         prompt = "\n\n".join(prompt_parts)
 
         try:
-            response = await self.ctx.chat(
-                agent_id=agent_id,
-                prompt=prompt,
-                provider=provider,
-                model=model,
-                system_prompt=system_prompt,
-                temperature=0.3,
-            )
+            cb = self._circuit_breakers.get(provider)
+            if cb:
+                response = await cb.call(
+                    self.ctx.chat,
+                    agent_id=agent_id,
+                    prompt=prompt,
+                    provider=provider,
+                    model=model,
+                    system_prompt=system_prompt,
+                    temperature=0.3,
+                )
+            else:
+                response = await self.ctx.chat(
+                    agent_id=agent_id,
+                    prompt=prompt,
+                    provider=provider,
+                    model=model,
+                    system_prompt=system_prompt,
+                    temperature=0.3,
+                )
             return {
                 "agent": name,
                 "response": response,
                 "status": "done",
                 "model": model,
                 "provider": provider,
+            }
+        except CircuitBreakerOpenError as e:
+            logger.warning(f"Circuit breaker open for {provider}: {e}")
+            return {
+                "agent": name,
+                "error": f"Circuit breaker open for {provider}",
+                "status": "failed",
             }
         except Exception as e:
             logger.error(f"LLM call failed for {name}: {e}")
