@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from edac.memory.short_term import ShortTermMemory
 from edac.context.budget import BudgetTracker
+from edac.model import ChatMessage, ModelProvider, ModelRegistry
 
 logger = logging.getLogger("edac.context.manager")
 
@@ -27,13 +28,15 @@ class ContextConfig:
     cheap_model: str = "claude-haiku-4-5"
     default_model: str = "claude-sonnet-4-6"
     premium_model: str = "claude-opus-4-7"
+    default_provider: str = "ollama"
 
 
 class ContextManager:
     """Manages context windows, token budgets, and model routing."""
 
-    def __init__(self, config: Optional[ContextConfig] = None):
+    def __init__(self, config: Optional[ContextConfig] = None, registry: Optional[ModelRegistry] = None):
         self.config = config or ContextConfig()
+        self.registry = registry or ModelRegistry()
         self._budget = BudgetTracker(
             agent_limit=self.config.max_tokens_per_agent,
             session_limit=self.config.max_tokens_per_session,
@@ -69,8 +72,53 @@ class ContextManager:
             return self.config.premium_model
         return self.config.default_model
 
+    async def chat(
+        self,
+        agent_id: str,
+        prompt: str,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Send a chat request to the configured provider."""
+        prov_name = provider or self.config.default_provider
+        prov = self.registry.get(prov_name)
+        if prov is None:
+            available = self.registry.get_available()
+            raise ValueError(f"Provider '{prov_name}' not found. Available: {available}")
+
+        messages: List[ChatMessage] = []
+        if system_prompt:
+            messages.append(ChatMessage(role="system", content=system_prompt))
+
+        # Add conversation history from window
+        window = self.get_window(agent_id)
+        for role, text in window.entries:
+            chat_role = "user" if role == "user" else "assistant"
+            messages.append(ChatMessage(role=chat_role, content=text))
+
+        messages.append(ChatMessage(role="user", content=prompt))
+
+        model = model or self.select_model(agent_id)
+        completion = await prov.chat(messages, model=model, **kwargs)
+
+        # Track token usage
+        usage = completion.usage
+        if isinstance(usage, dict):
+            total = usage.get("total_tokens", 0)
+        else:
+            total = usage or 0
+        self._budget.consume(agent_id, total)
+
+        # Store response in window
+        self.add_to_window(agent_id, "assistant", completion.content, total)
+
+        return completion.content
+
     def get_stats(self) -> Dict[str, Any]:
         return {
             "budget": self._budget.snapshot(),
             "active_windows": len(self._windows),
+            "providers": self.registry.get_available(),
         }
