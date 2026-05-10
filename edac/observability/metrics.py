@@ -82,18 +82,21 @@ class MetricsCollector:
             labels = ",".join(f'{k}="{v}"' for k, v in c.labels.items())
             lines.append(f"# HELP {c.name} counter")
             lines.append(f"# TYPE {c.name} counter")
-            lines.append(f"{c.name}{{{labels}}} {c.value}")
+            suffix = f"{{{labels}}}" if labels else ""
+            lines.append(f"{c.name}{suffix} {c.value}")
         for g in self._gauges.values():
             labels = ",".join(f'{k}="{v}"' for k, v in g.labels.items())
             lines.append(f"# HELP {g.name} gauge")
             lines.append(f"# TYPE {g.name} gauge")
-            lines.append(f"{g.name}{{{labels}}} {g.value}")
+            suffix = f"{{{labels}}}" if labels else ""
+            lines.append(f"{g.name}{suffix} {g.value}")
         for h in self._histograms.values():
             labels = ",".join(f'{k}="{v}"' for k, v in h.labels.items())
             for bucket, count in zip(h.buckets, h.counts):
-                lines.append(f'{h.name}_bucket{{le="{bucket}",{labels}}} {count}')
-            lines.append(f"{h.name}_sum{{{labels}}} {h.sum_value}")
-            lines.append(f"{h.name}_count{{{labels}}} {sum(h.counts)}")
+                lines.append(f'{h.name}_bucket{{le="{bucket}"{("," + labels) if labels else ""}}} {count}')
+            suffix = f"{{{labels}}}" if labels else ""
+            lines.append(f"{h.name}_sum{suffix} {h.sum_value}")
+            lines.append(f"{h.name}_count{suffix} {sum(h.counts)}")
         return "\n".join(lines)
 
     @staticmethod

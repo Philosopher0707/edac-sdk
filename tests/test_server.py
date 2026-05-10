@@ -105,7 +105,7 @@ class TestServerMetrics:
             response = client.get("/metrics")
             assert response.status_code == 200
             text = response.text
-            assert "tasks_submitted" in text or text == ""
+            assert "tasks_submitted" in text or "task_queue_size" in text or text == ""
             assert response.headers["content-type"].startswith("text/plain")
 
 

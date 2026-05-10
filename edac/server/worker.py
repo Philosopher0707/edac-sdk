@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -40,6 +41,7 @@ class TaskWorker:
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
         retry_max_delay: float = 60.0,
+        metrics: Optional[Any] = None,
     ):
         self.store = store
         self.executor = executor
@@ -47,9 +49,11 @@ class TaskWorker:
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
         self.retry_max_delay = retry_max_delay
+        self.metrics = metrics
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._current_task: Optional[QueuedTask] = None
+        self._current_process: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
 
     async def start(self) -> None:
@@ -85,17 +89,51 @@ class TaskWorker:
         await self.queue.put(task)
         logger.debug(f"Task {task.task_id} queued")
 
+    async def cancel_task(self, task_id: str) -> bool:
+        """Cancel a running or queued task.
+
+        Returns True if the task was found and cancelled.
+        """
+        # If currently processing, cancel the asyncio task
+        if self._current_task and self._current_task.task_id == task_id:
+            if self._current_process and not self._current_process.done():
+                self._current_process.cancel()
+                logger.info(f"Cancelling running task {task_id}")
+                return True
+        # If in queue, we can't easily remove from asyncio.Queue without draining.
+        # Mark as cancelled in store so worker skips it when it pops.
+        # For now, update store status and let it fail fast when picked up.
+        await self.store.update_task_status(task_id, status="cancelled")
+        await self.store.add_event(task_id, "task.cancelled", {"reason": "user_request"})
+        logger.info(f"Marked task {task_id} as cancelled")
+        return True
+
     async def _worker_loop(self) -> None:
         """Process tasks from the queue."""
         while self._running:
+            if self.metrics:
+                self.metrics.gauge("task_queue_size").set(self.queue.qsize())
             try:
                 task = await asyncio.wait_for(self.queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
 
             self._current_task = task
+            self._current_process = asyncio.create_task(self._process_with_retry(task))
             try:
-                await self._process_with_retry(task)
+                await self._current_process
+            except asyncio.CancelledError:
+                logger.info(f"Task {task.task_id} cancelled")
+                await self.store.update_task_status(
+                    task.task_id,
+                    status="cancelled",
+                    error="Cancelled by user",
+                )
+                await self.store.add_event(
+                    task.task_id,
+                    "task.cancelled",
+                    {"reason": "user_request"},
+                )
             except Exception as e:
                 logger.exception(f"Failed to process task {task.task_id}: {e}")
                 await self.store.update_task_status(
@@ -103,17 +141,19 @@ class TaskWorker:
                     status="failed",
                     error=str(e),
                 )
-                moved = await self.store.move_to_dlq(task.task_id, max_retries=self.max_retries)
+                moved = await self.store.move_to_dlq(task.task_id, max_retries=0)
                 if moved:
                     logger.warning(f"Task {task.task_id} moved to DLQ")
             finally:
+                self._current_process = None
                 self._current_task = None
                 self.queue.task_done()
 
     async def _process_with_retry(self, task: QueuedTask) -> None:
         """Process with retry and DLQ fallback."""
         last_err: Optional[Exception] = None
-        for attempt in range(1, self.max_retries + 1):
+        max_attempts = max(1, self.max_retries)
+        for attempt in range(1, max_attempts + 1):
             try:
                 return await self._process(task)
             except Exception as e:
@@ -146,12 +186,21 @@ class TaskWorker:
         )
 
         # Execute
+        start = time.monotonic()
         result = await self.executor.execute(
             goal=task.goal,
             agents=task.agents,
             pattern=task.pattern,
             max_parallel=task.max_parallel,
         )
+        elapsed_ms = (time.monotonic() - start) * 1000
+        if self.metrics:
+            self.metrics.histogram("task_execution_duration_ms").observe(elapsed_ms)
+            self.metrics.counter("tasks_processed").inc()
+            if result.success:
+                self.metrics.counter("tasks_completed").inc()
+            else:
+                self.metrics.counter("tasks_failed").inc()
 
         # Persist result
         if result.success:

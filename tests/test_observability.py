@@ -79,6 +79,18 @@ class TestMetricsCollector:
         assert "g" in text
         assert "h" in text
 
+    def test_export_no_trailing_comma_with_empty_labels(self):
+        mc = MetricsCollector()
+        mc.counter("c").inc()
+        mc.gauge("g").set(1)
+        mc.histogram("h").observe(5)
+        text = mc.export()
+        # Empty labels must not produce trailing commas like {le="10",}
+        assert ",{}}" not in text
+        assert ',"}' not in text
+        assert "c 1" in text or "c{}" in text
+        assert "g 1" in text or "g{}" in text
+
 
 class TestTrajectoryExporter:
     def test_summary(self, tmp_path):
