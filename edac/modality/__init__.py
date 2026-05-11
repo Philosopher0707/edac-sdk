@@ -20,4 +20,5 @@ __all__ = [
     "AudioAdapter",
     "VideoAdapter",
     "ArtifactAdapter",
+    "ModalityDispatcher",
 ]

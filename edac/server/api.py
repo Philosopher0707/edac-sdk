@@ -39,7 +39,7 @@ from edac.server.config import ServerConfig
 from edac.server.context import RuntimeContext
 from edac.server.executor import AgentExecutor
 from edac.server.rate_limiter import RateLimiter
-from edac.server.routers import agents_router, approval_router, memory_router, protocol_router, system_router, tasks_router
+from edac.server.routers import agents_router, approval_router, memory_router, modality_router, protocol_router, system_router, tasks_router
 from edac.server.store import create_store
 from edac.server.tracing import clear_request_id, get_request_id, set_request_id
 from edac.observability.tracing import Tracer
@@ -120,6 +120,10 @@ async def lifespan(app: FastAPI):
     # Plan engine (orchestration)
     plan_engine = PlanEngine(bus, registry=registry)
 
+    # Modality dispatcher
+    from edac.modality.dispatcher import ModalityDispatcher
+    modality_dispatcher = ModalityDispatcher()
+
     # Protocol bridges
     mcp_bridge = MCPBridge(tool_registry)
     a2a_bridge = A2ABridge(runtime.registry)
@@ -189,6 +193,7 @@ async def lifespan(app: FastAPI):
         sse_bridge=sse_bridge,
         tracer=tracer,
         approval_manager=approval_manager,
+        modality_dispatcher=modality_dispatcher,
     )
 
     app.state.bus = bus
@@ -311,6 +316,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     app.include_router(agents_router.router)
     app.include_router(approval_router.router)
     app.include_router(memory_router.router)
+    app.include_router(modality_router.router)
     app.include_router(system_router.router)
     app.include_router(protocol_router.router)
 
