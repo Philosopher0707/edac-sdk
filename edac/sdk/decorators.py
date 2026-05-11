@@ -25,12 +25,18 @@ def agent(
     sandbox: bool = False,
     max_restarts: int = 3,
     goal: Optional[str] = None,
+    auto_register: bool = True,
 ) -> Callable[[F], F]:
     """Decorator that marks a function as an agent handler.
 
+    When *auto_register* is ``True`` (the default) the decorated coroutine is
+    registered with the global `HandlerRegistry`.  `AgentRuntime` will then
+    use the correct factory automatically when `AgentRuntime.spawn()` is
+    called with a matching ``config.name``.
+
     Usage:
         @agent(name="coder", model="claude-sonnet")
-        async def my_coder(event: Event) -> Event:
+        async def my_coder(agent: AgentInstance) -> None:
             ...
     """
 
@@ -46,6 +52,10 @@ def agent(
             .build()
         )
         func._edac_agent_config = config  # type: ignore[attr-defined]
+        if auto_register:
+            # Deferred import avoids circular dependencies during type-checking
+            from edac.agent.handler_registry import HandlerRegistry  # noqa: F811
+            HandlerRegistry.get_default().register(name, func)
         return func
 
     return decorator

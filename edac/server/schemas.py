@@ -29,9 +29,22 @@ class TaskResponse(BaseModel):
     updated_at: str
 
 
+class CreateAgentRequest(BaseModel):
+    """Request to create a new agent."""
+
+    name: str = Field(..., min_length=1, max_length=256)
+    agent_type: str = Field(default="generic")
+    model: Optional[str] = None
+    skills: Optional[List[str]] = Field(default_factory=list)
+    goal: Optional[str] = None
+    sandbox: bool = False
+    max_restarts: int = Field(default=3, ge=0)
+
+
 class AgentInfo(BaseModel):
     """Agent information."""
 
+    agent_id: str
     name: str
     agent_type: str
     state: str

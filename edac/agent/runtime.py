@@ -26,8 +26,10 @@ from edac.agent.lifecycle import (
     AgentSpawner,
     DefaultAgentSpawner,
     HealthMonitor,
+    RegistryAwareSpawner,
     Supervisor,
 )
+from edac.agent.handler_registry import HandlerRegistry
 from edac.agent.registry import AgentCard, AgentRegistry
 
 logger = logging.getLogger("edac.agent.runtime")
@@ -45,10 +47,19 @@ class AgentRuntime:
         bus: EventBus,
         spawner: Optional[AgentSpawner] = None,
         registry: Optional[AgentRegistry] = None,
+        handler_registry: Optional[HandlerRegistry] = None,
     ):
         self.bus = bus
-        self.spawner = spawner or DefaultAgentSpawner(self._default_agent_factory)
+        self.handler_registry = handler_registry or HandlerRegistry.get_default()
         self.registry = registry or AgentRegistry()
+        # Use RegistryAwareSpawner so decorated factories are auto-discovered
+        if spawner is None:
+            self.spawner = RegistryAwareSpawner(
+                registry=self.handler_registry,
+                default_factory=self._default_agent_factory,
+            )
+        else:
+            self.spawner = spawner
         self.supervisor = Supervisor(self.spawner)
         self.health = HealthMonitor(
             on_unhealthy=self._on_unhealthy,
@@ -61,7 +72,9 @@ class AgentRuntime:
     ) -> None:
         """Set the coroutine factory used to run agent instances."""
         self._agent_factory = factory
-        if isinstance(self.spawner, DefaultAgentSpawner):
+        if isinstance(self.spawner, RegistryAwareSpawner):
+            self.spawner.default_factory = factory
+        elif isinstance(self.spawner, DefaultAgentSpawner):
             self.spawner.agent_factory = factory
 
     async def _default_agent_factory(self, agent: AgentInstance) -> None:

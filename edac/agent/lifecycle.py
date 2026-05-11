@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
 from uuid import uuid4
 
+from edac.agent.handler_registry import HandlerRegistry
 from edac.event.schema import AgentState, Event, EventType, EventPriority, create_event
 
 logger = logging.getLogger("edac.agent.lifecycle")
@@ -188,6 +189,45 @@ class DefaultAgentSpawner(AgentSpawner):
                 pass
         await agent.transition(AgentState.TERMINATED)
         logger.info(f"Agent {agent.agent_id} killed: {reason}")
+
+
+from edac.agent.handler_registry import HandlerRegistry  # noqa: E402 – import at end to avoid cycles
+
+
+class RegistryAwareSpawner(DefaultAgentSpawner):
+    """Spawner that picks a per-name factory from a HandlerRegistry.
+
+    Falls back to the default factory when the agent ``config.name``
+    has no registered handler.  This lets ``@agent(auto_register=True)``
+    wire decorators into the runtime without manual ``set_agent_factory()``
+    calls.
+    """
+
+    def __init__(
+        self,
+        *,
+        registry: HandlerRegistry,
+        default_factory: Callable[[AgentInstance], Coroutine[Any, Any, None]],
+    ):
+        super().__init__(default_factory)
+        self.registry = registry
+
+    def _resolve_factory(self, config: AgentConfig) -> Callable[[AgentInstance], Coroutine[Any, Any, None]]:
+        factory = self.registry.get(config.name)
+        if factory is not None:
+            return factory
+        return self.agent_factory
+
+    async def spawn(self, config: AgentConfig) -> AgentInstance:
+        agent = AgentInstance(config)
+        await agent.transition(AgentState.INITIALIZING)
+
+        factory = self._resolve_factory(config)
+        coro = factory(agent)
+        agent.task = asyncio.create_task(coro, name=f"agent-{agent.agent_id}")
+
+        await agent.transition(AgentState.IDLE)
+        return agent
 
 
 # ──────────────────────────────────────────────────────────────

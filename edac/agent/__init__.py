@@ -1,9 +1,6 @@
-"""Agent runtime layer for EDAC.
+"""Agent subsystem — lifecycle, registry, runtime, and handler registry."""
 
-Provides agent lifecycle management, supervision, health monitoring,
-registry/discovery, and the main runtime entry point.
-"""
-
+from edac.agent.handler_registry import HandlerRegistry
 from edac.agent.lifecycle import (
     AgentConfig,
     AgentInstance,
@@ -19,10 +16,11 @@ __all__ = [
     "AgentConfig",
     "AgentInstance",
     "AgentSpawner",
-    "DefaultAgentSpawner",
-    "HealthMonitor",
-    "Supervisor",
     "AgentCard",
     "AgentRegistry",
     "AgentRuntime",
+    "DefaultAgentSpawner",
+    "HandlerRegistry",
+    "HealthMonitor",
+    "Supervisor",
 ]

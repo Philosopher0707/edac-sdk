@@ -48,7 +48,13 @@ ACTION_SUBMIT_TASK = "submit_task"
 ACTION_LIST_TASKS = "list_tasks"
 ACTION_GET_TASK = "get_task"
 ACTION_GET_EVENTS = "get_events"
+ACTION_CREATE_AGENT = "create_agent"
 ACTION_LIST_AGENTS = "list_agents"
+ACTION_GET_AGENT = "get_agent"
+ACTION_DELETE_AGENT = "delete_agent"
+ACTION_RESTART_AGENT = "restart_agent"
+ACTION_PAUSE_AGENT = "pause_agent"
+ACTION_RESUME_AGENT = "resume_agent"
 ACTION_GET_METRICS = "get_metrics"
 ACTION_GET_HEALTH = "get_health"
 
@@ -58,7 +64,13 @@ _PERMISSIONS: Dict[Role, Set[str]] = {
         ACTION_LIST_TASKS,
         ACTION_GET_TASK,
         ACTION_GET_EVENTS,
-        ACTION_LIST_AGENTS,
+        ACTION_LIST_AGENTS, 
+        ACTION_CREATE_AGENT,
+        ACTION_GET_AGENT,
+        ACTION_DELETE_AGENT,
+        ACTION_RESTART_AGENT,
+        ACTION_PAUSE_AGENT,
+        ACTION_RESUME_AGENT,
         ACTION_GET_METRICS,
         ACTION_GET_HEALTH,
     },
@@ -67,6 +79,8 @@ _PERMISSIONS: Dict[Role, Set[str]] = {
         ACTION_LIST_TASKS,
         ACTION_GET_TASK,
         ACTION_GET_EVENTS,
+        ACTION_LIST_AGENTS,
+        ACTION_GET_AGENT,
         ACTION_GET_HEALTH,
     },
     Role.VIEWER: {
