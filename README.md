@@ -105,13 +105,26 @@ card_json = bridge.generate_agent_card(card)
 task = bridge.create_task("task-1", A2AMessage.from_text("user", "hello"))
 ```
 
+## Interactive API Docs
+
+When running the server:
+
+```bash
+edac server start
+```
+
+Interactive OpenAPI docs are available at:
+
+- **Swagger UI** → `http://localhost:8000/docs`
+- **ReDoc** → `http://localhost:8000/redoc`
+
 ## Tests
 
 ```bash
-PYTHONPATH=.. python3 -m pytest tests/ -v
+python -m pytest tests/ -v
 ```
 
-175 tests across 12 test files.
+356 tests across 19 test files.
 
 ## License
 

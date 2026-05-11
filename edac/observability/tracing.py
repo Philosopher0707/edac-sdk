@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import logging
 import time
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
 
 from edac.event.schema import Event
 
@@ -19,6 +19,7 @@ logger = logging.getLogger("edac.observability.tracing")
 @dataclass
 class Span:
     """A trace span."""
+
     name: str
     trace_id: str
     span_id: str
@@ -29,11 +30,16 @@ class Span:
     events: List[Dict[str, Any]] = field(default_factory=list)
 
     def add_event(self, name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
-        self.events.append({
-            "name": name,
-            "timestamp": time.time(),
-            "attributes": attributes or {},
-        })
+        self.events.append(
+            {
+                "name": name,
+                "timestamp": time.time(),
+                "attributes": attributes or {},
+            }
+        )
+
+    def set_attribute(self, key: str, value: Any) -> None:
+        self.attributes[key] = value
 
     def finish(self) -> None:
         self.end_time = time.time()
@@ -68,11 +74,14 @@ class Tracer:
     def trace_event(self, event: Event) -> Span:
         """Create a span from an event."""
         span = self.start_span(f"event:{event.event_type.value}")
-        span.add_event("event", {
-            "event_type": event.event_type.value,
-            "source": event.source,
-            "topic": event.topic,
-        })
+        span.add_event(
+            "event",
+            {
+                "event_type": event.event_type.value,
+                "source": event.source,
+                "topic": event.topic,
+            },
+        )
         return span
 
     def export(self) -> List[Dict[str, Any]]:
@@ -97,3 +106,22 @@ class Tracer:
             yield s
         finally:
             self.end_span(s)
+
+    @asynccontextmanager
+    async def async_span(self, name: str) -> AsyncGenerator[Span, None]:
+        """Async context manager for creating spans in async functions."""
+        s = self.start_span(name)
+        try:
+            yield s
+        finally:
+            self.end_span(s)
+
+    def get_finished_spans(self) -> List[Span]:
+        """Return all finished spans."""
+        return list(self._finished)
+
+    def reset(self) -> None:
+        """Clear all finished and in-progress spans."""
+        self._spans.clear()
+        self._finished.clear()
+        self._trace_counter = 0

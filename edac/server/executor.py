@@ -79,8 +79,6 @@ class AgentExecutor:
         )
 
         # Override _invoke_agent to use real LLM
-        original_invoke = swarm._invoke_agent
-
         async def _real_invoke(name: str, agent_id: str, context: Dict[str, Any]) -> Any:
             context.setdefault("agents", agents)
             return await self._call_llm(name, agent_id, context)
@@ -88,6 +86,14 @@ class AgentExecutor:
         swarm._invoke_agent = _real_invoke  # type: ignore[method-assign]
 
         try:
+            if self.tracer is not None:
+                async with self.tracer.async_span("executor.execute") as span:
+                    span.set_attribute("goal", goal)
+                    span.set_attribute("pattern", pattern)
+                    span.set_attribute("agent_count", len(agents))
+                    result = await swarm.execute(goal)
+                    span.set_attribute("success", result.success)
+                    return result
             result = await swarm.execute(goal)
             return result
         except Exception as e:
@@ -141,25 +147,22 @@ class AgentExecutor:
                 }
 
         try:
-            cb = self._circuit_breakers.get(provider)
-            if cb:
-                response = await cb.call(
-                    self.ctx.chat,
-                    agent_id=agent_id,
-                    prompt=prompt,
-                    provider=provider,
-                    model=model,
-                    system_prompt=system_prompt,
-                    temperature=0.3,
-                )
+            # Raw LLM call (with optional tracing around it)
+            if self.tracer is not None:
+                async with self.tracer.async_span(f"llm.call:{name}") as span:
+                    span.set_attribute("agent_name", name)
+                    span.set_attribute("agent_id", agent_id)
+                    span.set_attribute("provider", provider)
+                    span.set_attribute("model", model or "default")
+                    span.set_attribute("prompt_length", len(prompt))
+                    response = await self._do_llm_call(
+                        agent_id, prompt, system_prompt, provider, model
+                    )
+                    if isinstance(response, str):
+                        span.set_attribute("response_length", len(response))
             else:
-                response = await self.ctx.chat(
-                    agent_id=agent_id,
-                    prompt=prompt,
-                    provider=provider,
-                    model=model,
-                    system_prompt=system_prompt,
-                    temperature=0.3,
+                response = await self._do_llm_call(
+                    agent_id, prompt, system_prompt, provider, model
                 )
 
             # Optional tool execution loop (ReAct-style)
@@ -180,13 +183,8 @@ class AgentExecutor:
                         agent_id, "tool", f"Tool {tool_name} result: {tool_result}"
                     )
                     # Re-call LLM with updated context
-                    response = await self.ctx.chat(
-                        agent_id=agent_id,
-                        prompt=prompt,
-                        provider=provider,
-                        model=model,
-                        system_prompt=system_prompt,
-                        temperature=0.3,
+                    response = await self._do_llm_call(
+                        agent_id, prompt, system_prompt, provider, model
                     )
                 else:
                     logger.warning(f"Tool loop exceeded max iterations for agent {name}")
@@ -212,6 +210,35 @@ class AgentExecutor:
                 "error": str(e),
                 "status": "failed",
             }
+
+    async def _do_llm_call(
+        self,
+        agent_id: str,
+        prompt: str,
+        system_prompt: str,
+        provider: str,
+        model: Optional[str],
+    ) -> str:
+        """Raw LLM call through circuit breaker or direct."""
+        cb = self._circuit_breakers.get(provider)
+        if cb:
+            return await cb.call(
+                self.ctx.chat,
+                agent_id=agent_id,
+                prompt=prompt,
+                provider=provider,
+                model=model,
+                system_prompt=system_prompt,
+                temperature=0.3,
+            )
+        return await self.ctx.chat(
+            agent_id=agent_id,
+            prompt=prompt,
+            provider=provider,
+            model=model,
+            system_prompt=system_prompt,
+            temperature=0.3,
+        )
 
     def _extract_tool_call(self, response: str) -> Optional[tuple[str, Dict[str, Any]]]:
         """Detect a tool-call request in an LLM response.

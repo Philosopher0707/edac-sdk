@@ -76,6 +76,15 @@ class Swarm:
 
     async def execute(self, goal: str, **kwargs: Any) -> SwarmResult:
         """Execute the swarm on a goal."""
+        if self.tracer is not None:
+            async with self.tracer.async_span(f"swarm.execute:{self.pattern}") as span:
+                span.set_attribute("goal", goal)
+                span.set_attribute("agent_count", len(self.agents))
+                span.set_attribute("pattern", self.pattern)
+                return await self._execute(goal, **kwargs)
+        return await self._execute(goal, **kwargs)
+
+    async def _execute(self, goal: str, **kwargs: Any) -> SwarmResult:
         if self.pattern == "pipeline":
             return await self._execute_pipeline(goal, **kwargs)
         if self.pattern == "mesh":
@@ -259,6 +268,18 @@ class Swarm:
 
     async def _invoke_agent(self, name: str, agent_id: str, context: Dict[str, Any]) -> Any:
         """Simulate agent invocation. Returns agent result."""
+        if self.tracer is not None:
+            async with self.tracer.async_span(f"agent.invoke:{name}") as span:
+                span.set_attribute("agent_name", name)
+                span.set_attribute("agent_id", agent_id)
+                span.set_attribute("context_keys", list(context.keys()))
+                logger.debug(f"Invoking agent {name} ({agent_id}) with context keys: {list(context.keys())}")
+                result = await self._do_invoke_agent(name, agent_id, context)
+                span.set_attribute("status", result.get("status", "unknown") if isinstance(result, dict) else "done")
+                return result
         logger.debug(f"Invoking agent {name} ({agent_id}) with context keys: {list(context.keys())}")
+        return await self._do_invoke_agent(name, agent_id, context)
+
+    async def _do_invoke_agent(self, name: str, agent_id: str, context: Dict[str, Any]) -> Any:
         # Placeholder: real implementation would send event, await response
         return {"agent": name, "context_keys": list(context.keys()), "status": "done"}

@@ -3,3 +3,11 @@ __pycache__/
 
 # Wisp checkpoints
 .wisp/checkpoints/
+
+# Build artifacts
+.coverage
+docs/site/
+
+# Dev artifacts
+edac.db
+.claude/
