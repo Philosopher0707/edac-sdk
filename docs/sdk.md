@@ -6,7 +6,7 @@ The EDAC SDK provides decorators and helpers for quickly building agents and wor
 
 ### `@agent`
 
-Register a function as an agent with metadata.
+Register a function as an agent with metadata. The decorated function retains its original behavior, and the config is stored on `func._edac_agent_config` for later spawning via `AgentRuntime`.
 
 ```python
 from edac.sdk import agent
@@ -33,7 +33,7 @@ async def coder(event):
 | `model` | `str` | `None` | LLM model slug |
 | `skills` | `List[str]` | `[]` | Loaded skill documents |
 | `sandbox` | `bool` | `False` | Run in sandbox mode |
-| `max_iterations` | `int` | `10` | Max ReAct tool loops |
+| `max_restarts` | `int` | `3` | Max crash restarts |
 
 ### `@skill`
 
@@ -82,17 +82,31 @@ agent = builder.build()
 
 ## Workflow Runner
 
-```python
-from edac.sdk import WorkflowRunner
-from edac.swarm import Swarm
+The `WorkflowRunner` executes a linear sequence of agent tasks via the `PlanEngine`.
+Agents must be pre-registered in `AgentRuntime` before running.
 
-runner = WorkflowRunner(swarm)
-result = await runner.run([
-    {"agent": "planner", "task": "Plan API"},
-    {"agent": "coder", "task": "Implement API"},
-    {"agent": "tester", "task": "Write tests"},
-])
+```python
+from edac.sdk import Workflow, WorkflowRunner
+from edac.agent.runtime import AgentRuntime
+from edac.agent.lifecycle import AgentConfig
+from edac.event.bus import EventBus
+
+async with EventBus() as bus:
+    async with AgentRuntime(bus) as runtime:
+        # 1. Spawn agents into the runtime
+        await runtime.spawn(AgentConfig(name="planner"))
+        await runtime.spawn(AgentConfig(name="coder"))
+
+        # 2. Build and run the workflow
+        wf = Workflow([
+            {"agent": "planner", "task": "Plan API"},
+            {"agent": "coder", "task": "Implement API"},
+        ])
+        runner = WorkflowRunner(runtime, wf)
+        results = await runner.run()
 ```
+
+Each result dict contains: `{"agent", "task", "status", "agent_id"}`.
 
 ## Event Helpers
 

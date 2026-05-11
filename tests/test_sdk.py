@@ -29,6 +29,37 @@ class TestAgentDecorator:
         assert cfg.max_restarts == 3
 
 
+class TestAgentDecoratorFunctional:
+    @pytest.mark.asyncio
+    async def test_decorator_config_spawns_in_runtime(self):
+        """An @agent decorated function's config should be spawnable in AgentRuntime."""
+        from edac.agent.runtime import AgentRuntime
+        from edac.event.bus import EventBus
+
+        bus = EventBus()
+        await bus.start()
+        runtime = AgentRuntime(bus)
+        await runtime.start()
+
+        @agent(name="worker", model="test-model", skills=["python"])
+        async def worker_agent(event):
+            return {"status": "ok"}
+
+        # Use the decorator config to spawn an agent
+        cfg = worker_agent._edac_agent_config
+        spawned = await runtime.spawn(cfg)
+        assert spawned.config.name == "worker"
+        assert spawned.config.model == "test-model"
+        assert spawned.config.skills == ["python"]
+        assert spawned.agent_id.startswith("worker-")
+
+        # Verify it's registered
+        assert runtime.registry.find_by_name("worker")
+
+        await runtime.stop()
+        await bus.stop()
+
+
 class TestSkillDecorator:
     def test_inline_skill(self):
         @skill(name="inline-skill", description="test", applies_when="test query")
@@ -66,6 +97,8 @@ class TestAgentBuilder:
             .name("coder")
             .model("claude-sonnet")
             .skill("python")
+            .tool("web_search")
+            .memory("short-term")
             .sandbox(True)
             .max_restarts(5)
             .build()
@@ -74,6 +107,8 @@ class TestAgentBuilder:
         assert config.model == "claude-sonnet"
         assert config.skills == ["python"]
         assert config.config["sandbox"] is True
+        assert config.config["tools"] == ["web_search"]
+        assert config.config["memory"] == "short-term"
         assert config.max_restarts == 5
 
 
@@ -99,13 +134,13 @@ class TestWorkflowRunner:
     async def test_run_linear(self):
         from edac.agent.runtime import AgentRuntime
         from edac.event.bus import EventBus
+        from edac.agent.lifecycle import AgentConfig
 
         bus = EventBus()
         await bus.start()
         runtime = AgentRuntime(bus)
         await runtime.start()
 
-        from edac.agent.lifecycle import AgentConfig
         planner = await runtime.spawn(AgentConfig(name="planner"))
         coder = await runtime.spawn(AgentConfig(name="coder"))
 

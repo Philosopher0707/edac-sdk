@@ -124,7 +124,7 @@ Interactive OpenAPI docs are available at:
 python -m pytest tests/ -v
 ```
 
-356 tests across 19 test files.
+422 tests across 20 test files.
 
 ## License
 

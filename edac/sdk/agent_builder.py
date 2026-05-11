@@ -6,6 +6,8 @@ Usage:
         .name("coder")
         .model("claude-sonnet-4-6")
         .skill("python-refactor")
+        .tool("web_search")
+        .memory("short-term")
         .sandbox(True)
         .build()
     )
@@ -27,6 +29,8 @@ class AgentBuilder:
     _type: str = "generic"
     _model: Optional[str] = None
     _skills: List[str] = field(default_factory=list)
+    _tools: List[str] = field(default_factory=list)
+    _memory: Optional[str] = None
     _goal: Optional[str] = None
     _sandbox: bool = False
     _max_restarts: int = 3
@@ -50,6 +54,18 @@ class AgentBuilder:
 
     def skills(self, values: List[str]) -> AgentBuilder:
         self._skills.extend(values)
+        return self
+
+    def tool(self, value: str) -> AgentBuilder:
+        self._tools.append(value)
+        return self
+
+    def tools(self, values: List[str]) -> AgentBuilder:
+        self._tools.extend(values)
+        return self
+
+    def memory(self, value: str) -> AgentBuilder:
+        self._memory = value
         return self
 
     def goal(self, value: str) -> AgentBuilder:
@@ -76,5 +92,10 @@ class AgentBuilder:
             skills=self._skills,
             goal=self._goal,
             max_restarts=self._max_restarts,
-            config={"sandbox": self._sandbox, **self._config},
+            config={
+                "sandbox": self._sandbox,
+                "tools": self._tools,
+                "memory": self._memory,
+                **self._config,
+            },
         )
