@@ -36,6 +36,8 @@ from edac.event.router import (
     RoutingStats,
 )
 
+from edac.event.vector_clock import VectorClock
+
 __all__ = [
     # Schema
     "Event",
@@ -64,4 +66,6 @@ __all__ = [
     "RouteRule",
     "TopicMatcher",
     "RoutingStats",
+    # Vector Clock
+    "VectorClock",
 ]

@@ -26,6 +26,8 @@ from typing import (
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .vector_clock import VectorClock
+
 
 # ──────────────────────────────────────────────────────────────
 # Core State Enums (referenced by __init__)
@@ -284,6 +286,20 @@ class Event(BaseModel):
                     "Includes token usage, agent state, plan progress, etc.",
     )
     
+    # ── Vector Clock Helpers ──
+    def get_vector_clock(self) -> "VectorClock":
+        """Return the causality vector as a VectorClock instance."""
+        from edac.event.vector_clock import VectorClock
+        return VectorClock.from_dict(self.causality_vector)
+
+    def happens_before(self, other: "Event") -> bool:
+        """Return True if this event causally happens-before another."""
+        return self.get_vector_clock().happens_before(other.get_vector_clock())
+
+    def concurrent_with(self, other: "Event") -> bool:
+        """Return True if this event is concurrent with another (no causal relation)."""
+        return self.get_vector_clock().concurrent_with(other.get_vector_clock())
+
     # ── Validation ──
     @field_validator("source")
     @classmethod
@@ -309,7 +325,25 @@ class Event(BaseModel):
     
     def is_system_critical(self) -> bool:
         return self.priority == EventPriority.CRITICAL
-    
+
+    # ── Vector Clock Helpers ──
+
+    def _get_vc(self) -> VectorClock:
+        """Internal: get this event's vector clock as VectorClock instance."""
+        return VectorClock.from_dict(self.causality_vector)
+
+    def happens_before(self, other: "Event") -> bool:
+        """Return True if this event strictly happens-before another."""
+        return self._get_vc().happens_before(other._get_vc())
+
+    def happens_after(self, other: "Event") -> bool:
+        """Return True if this event strictly happens-after another."""
+        return self._get_vc().happens_after(other._get_vc())
+
+    def concurrent_with(self, other: "Event") -> bool:
+        """Return True if this event and another are concurrent (no causal relation)."""
+        return self._get_vc().concurrent_with(other._get_vc())
+
     def is_expired(self, now: Optional[datetime] = None) -> bool:
         """Check if event has exceeded its TTL."""
         if self.ttl_seconds is None:

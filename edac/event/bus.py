@@ -40,6 +40,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict
 
 from .schema import Event, EventType, EventPriority
+from .vector_clock import VectorClock
 
 logger = logging.getLogger("edac.event_bus")
 
@@ -206,6 +207,7 @@ class EventBus:
         persistence_path: Optional[str] = None,
         redis_url: Optional[str] = None,
         tracer: Optional[Any] = None,
+        node_id: Optional[str] = None,
     ):
         self.max_queue_depth = max_queue_depth
         self.default_priority = default_priority
@@ -213,6 +215,10 @@ class EventBus:
         self.persistence_path = persistence_path
         self.redis_url = redis_url
         self.tracer = tracer
+        
+        # Vector clock for distributed causality
+        self.node_id = node_id or f"node-{uuid4().hex[:8]}"
+        self._vector_clock = VectorClock()
         
         # Redis state
         self._redis: Optional[Any] = None
@@ -410,18 +416,25 @@ class EventBus:
             raise RuntimeError("Event bus is not running")
 
         async with self._lock:
+            # Stamp vector clock: increment local node, merge with event's existing clock
+            self._vector_clock.increment(self.node_id)
+            merged_vc = self._vector_clock.copy()
+            if event.causality_vector:
+                merged_vc.merge(VectorClock.from_dict(event.causality_vector))
+            stamped_event = event.model_copy(update={"causality_vector": merged_vc.as_dict()})
+
             # Check backpressure
             total_depth = sum(q.qsize() for q in self._queues.values())
 
             if total_depth >= self.max_queue_depth:
-                event_priority = event.priority
+                event_priority = stamped_event.priority
 
                 # Drop low/normal priority events under backpressure
                 if event_priority in (EventPriority.LOW, EventPriority.NORMAL):
                     self._stats.events_dropped += 1
                     self._stats.backpressure_triggered += 1
                     logger.warning(
-                        f"Event dropped due to backpressure: {event.event_type} "
+                        f"Event dropped due to backpressure: {stamped_event.event_type} "
                         f"(queue_depth={total_depth})"
                     )
                     return False
@@ -429,12 +442,12 @@ class EventBus:
                 # Accept high/critical priority events even under backpressure
                 logger.warning(
                     f"Accepting high-priority event despite backpressure: "
-                    f"{event.event_type}"
+                    f"{stamped_event.event_type}"
                 )
 
             # Add to appropriate priority queue
-            priority = event.priority
-            await self._queues[priority].put(event)
+            priority = stamped_event.priority
+            await self._queues[priority].put(stamped_event)
 
             self._stats.events_emitted += 1
             self._stats.queue_depth = total_depth + 1
@@ -442,17 +455,17 @@ class EventBus:
         
         # Add to event log
         if self.enable_persistence:
-            self._event_log.append(event)
+            self._event_log.append(stamped_event)
             if len(self._event_log) > self._max_log_size:
                 # Rotate log (keep last 50%)
                 self._event_log = self._event_log[self._max_log_size // 2:]
         
-        logger.debug(f"Event emitted: {event.event_type} (priority={event.priority})")
+        logger.debug(f"Event emitted: {stamped_event.event_type} (priority={stamped_event.priority}, vc={stamped_event.causality_vector})")
         
         # Publish to Redis for distributed propagation
         if self._redis:
             try:
-                await self._redis.publish("edac:events", event.model_dump_json())
+                await self._redis.publish("edac:events", stamped_event.model_dump_json())
             except Exception as e:
                 logger.warning(f"Failed to publish event to Redis: {e}")
         
@@ -486,7 +499,10 @@ class EventBus:
                 try:
                     data = json.loads(message["data"])
                     event = Event.model_validate(data)
-                    # Re-emit locally without re-publishing to Redis
+                    # Merge remote vector clock into local clock before re-emitting
+                    if event.causality_vector:
+                        self._vector_clock.merge(VectorClock.from_dict(event.causality_vector))
+                    # Re-emit locally without re-stamping (already has merged clock)
                     async with self._lock:
                         priority = event.priority
                         await self._queues[priority].put(event)
@@ -651,6 +667,10 @@ class EventBus:
         finally:
             self._stream_queues.discard(queue)
     
+    def get_vector_clock(self) -> VectorClock:
+        """Return a copy of the bus's current vector clock."""
+        return self._vector_clock.copy()
+
     def get_stats(self) -> BusStats:
         """Get current bus statistics."""
         self._stats.queue_depth = sum(
