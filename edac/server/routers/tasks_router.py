@@ -38,6 +38,13 @@ def _task_to_response(record) -> TaskResponse:
     )
 
 
+def _add_pagination_headers(response, total: int, limit: int, offset: int) -> None:
+    """Attach pagination metadata as response headers."""
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Limit"] = str(limit)
+    response.headers["X-Offset"] = str(offset)
+
+
 @router.post("/tasks", response_model=TaskResponse)
 async def submit_task(req: SubmitTaskRequest, request: Request) -> TaskResponse:
     """Submit a new multi-agent task."""
@@ -75,6 +82,51 @@ async def submit_task(req: SubmitTaskRequest, request: Request) -> TaskResponse:
     return _task_to_response(record)
 
 
+@router.post("/tasks/batch")
+async def submit_tasks_batch(
+    reqs: List[SubmitTaskRequest],
+    request: Request,
+) -> List[Dict[str, Any]]:
+    """Submit multiple tasks in a single request.
+
+    Returns a list where each element is either a *TaskResponse* dict or a
+    *BatchError* dict.
+    """
+    app = request.app
+    user = getattr(request.state, "user", None)
+    store: TaskStore = app.state.store
+    worker: TaskWorker = app.state.worker
+    results: List[Dict[str, Any]] = []
+
+    for req in reqs:
+        if user and not app.state.auth.is_allowed(user, ACTION_SUBMIT_TASK):
+            results.append({"error": "Permission denied", "detail": ACTION_SUBMIT_TASK})
+            continue
+        try:
+            task_id = str(uuid.uuid4())
+            await store.create_task(
+                task_id=task_id,
+                goal=req.goal,
+                pattern=req.pattern,
+                agents=req.agents,
+            )
+            await worker.submit(
+                QueuedTask(
+                    task_id=task_id,
+                    goal=req.goal,
+                    pattern=req.pattern,
+                    agents=req.agents,
+                    max_parallel=req.max_parallel,
+                )
+            )
+            record = await store.get_task(task_id)
+            results.append(_task_to_response(record).model_dump())
+        except Exception as exc:
+            results.append({"error": "Failed to submit task", "detail": str(exc)})
+
+    return results
+
+
 @router.get("/tasks")
 async def list_tasks(
     request: Request,
@@ -82,7 +134,7 @@ async def list_tasks(
     limit: int = 100,
     offset: int = 0,
 ) -> List[TaskResponse]:
-    """List tasks."""
+    """List tasks with optional filtering and pagination."""
     app = request.app
     user = getattr(request.state, "user", None)
     if user and not app.state.auth.is_allowed(user, ACTION_LIST_TASKS):
@@ -91,8 +143,22 @@ async def list_tasks(
 
     store: TaskStore = app.state.store
     records = await store.list_tasks(status=status, limit=limit, offset=offset)
+    total = await store.count_tasks(status=status)
+
     log_audit(ACTION_LIST_TASKS, "/tasks", "success", user=getattr(user, "name", None))
-    return [_task_to_response(r) for r in records]
+
+    # FastAPI injects the response object for header manipulation
+    from fastapi.responses import JSONResponse
+
+    response = JSONResponse(
+        content=[_task_to_response(r).model_dump() for r in records],
+        headers={
+            "X-Total-Count": str(total),
+            "X-Limit": str(limit),
+            "X-Offset": str(offset),
+        },
+    )
+    return response  # type: ignore[return-value]
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)

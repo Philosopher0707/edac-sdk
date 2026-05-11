@@ -20,6 +20,9 @@ from typing import Optional
 import click
 import uvicorn
 
+from edac.cli.commands.agents import agents
+from edac.cli.commands.events import events
+from edac.cli.commands.tasks import tasks
 from edac.server.api import create_app
 from edac.server.config import ServerConfig
 
@@ -56,6 +59,11 @@ def cli(ctx: click.Context, config: Optional[str], verbose: bool) -> None:
     _setup_logging("debug" if verbose else cfg.log_level)
 
 
+cli.add_command(agents)
+cli.add_command(tasks)
+cli.add_command(events)
+
+
 @cli.command()
 @click.option("--host", default=None, help="Bind host")
 @click.option("--port", type=int, default=None, help="Bind port")
@@ -86,6 +94,9 @@ def serve(ctx: click.Context, host: Optional[str], port: Optional[int], workers:
 @click.option("--provider", default="ollama", help="Model provider")
 @click.option("--model", default=None, help="Model name")
 @click.option("--server", default="http://localhost:8000", help="Server URL")
+@click.option("--watch", is_flag=True, help="Watch task via WebSocket after submission")
+@click.option("--api-key", default=None, help="API key for authentication")
+@click.option("--timeout", type=float, default=30.0, help="WebSocket timeout")
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -96,71 +107,84 @@ def run(
     provider: str,
     model: Optional[str],
     server: str,
+    watch: bool,
+    api_key: Optional[str],
+    timeout: float,
 ) -> None:
-    """Run a single task via the EDAC server or locally."""
-    import httpx
+    """Run a single task via the EDAC server."""
+    from edac.server.schemas import SubmitTaskRequest
 
-    # Parse agents
-    agent_list = []
-    for a in agents:
-        agent_list.append(json.loads(a))
+    agent_list = [json.loads(a) for a in agents] if agents else []
 
     # Default agents if none provided
     if not agent_list:
+        default_model = model or "llama3.2"
         agent_list = [
-            {"name": "planner", "role": "orchestrator", "task": "Plan", "model": model or "llama3.2"},
-            {"name": "coder", "role": "worker", "task": "Code", "model": model or "llama3.2"},
-            {"name": "reviewer", "role": "critic", "task": "Review", "model": model or "llama3.2"},
+            {"name": "planner", "role": "orchestrator", "model": default_model},
+            {"name": "coder", "role": "worker", "model": default_model},
+            {"name": "reviewer", "role": "critic", "model": default_model},
         ]
 
-    payload = {
-        "goal": goal,
-        "pattern": pattern,
-        "agents": agent_list,
-        "max_parallel": max_parallel,
-    }
+    req = SubmitTaskRequest(
+        goal=goal,
+        pattern=pattern,
+        agents=agent_list,
+        max_parallel=max_parallel,
+    )
 
-    async def _submit() -> None:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(f"{server}/tasks", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            click.echo(f"Task submitted: {data['id']}")
-            click.echo(f"Status: {data['status']}")
+    client = EdacClientSync(server, api_key=api_key)
+    try:
+        task = client.submit_task(req)
+        click.echo(f"Task submitted: {task.id}")
+        click.echo(f"Status: {task.status}")
 
-            # Poll for completion
-            task_id = data["id"]
-            while True:
-                await asyncio.sleep(1)
-                resp = await client.get(f"{server}/tasks/{task_id}")
-                resp.raise_for_status()
-                task = resp.json()
-                if task["status"] in ("completed", "failed"):
-                    click.echo(f"\nFinal status: {task['status']}")
-                    if task.get("result"):
-                        click.echo(json.dumps(task["result"], indent=2))
-                    if task.get("error"):
-                        click.echo(f"Error: {task['error']}", err=True)
+        if watch:
+            click.echo("--- watching task ---")
+            n = 0
+            for update in client.watch_task(task.id, timeout=timeout):
+                click.echo(f"  [{update.type}] status={update.status}")
+                n += 1
+                if n >= 5:
                     break
-                click.echo(".", nl=False)
+        else:
+            # Poll via get_task until terminal
+            import time
 
-    asyncio.run(_submit())
+            for _ in range(30):
+                time.sleep(1)
+                t = client.get_task(task.id)
+                click.echo(f". {t.status}", nl=False)
+                if t.status in ("completed", "failed"):
+                    click.echo(f"\nFinal: {t.status}")
+                    if t.result:
+                        click.echo(json.dumps(t.result, indent=2))
+                    if t.error:
+                        click.echo(f"Error: {t.error}", err=True)
+                    break
+            click.echo("")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    finally:
+        client.close()
 
 
 @cli.command()
 @click.option("--server", default="http://localhost:8000", help="Server URL")
-def status(server: str) -> None:
+@click.option("--api-key", default=None, help="API key for authentication")
+def status(server: str, api_key: Optional[str]) -> None:
     """Check EDAC server health."""
-    import httpx
-
+    client = EdacClientSync(server, api_key=api_key)
     try:
-        resp = httpx.get(f"{server}/health")
-        resp.raise_for_status()
-        data = resp.json()
-        click.echo(f"Server: {data['status']} (v{data['version']})")
+        health = client.get_health()
+        click.echo(f"Server: {health.status} (v{health.version})")
+        if health.components:
+            click.echo(f"Components: {len(health.components)}")
     except Exception as e:
         click.echo(f"Server unreachable: {e}", err=True)
         sys.exit(1)
+    finally:
+        client.close()
 
 
 @cli.group(name="approvals")
@@ -257,7 +281,7 @@ def approve_gate(trigger: str, approver: str, server: str) -> None:
 @cli.command()
 def version() -> None:
     """Show EDAC version."""
-    click.echo("EDAC 0.2.0")
+    click.echo("EDAC 0.3.0")
 
 
 def main() -> None:

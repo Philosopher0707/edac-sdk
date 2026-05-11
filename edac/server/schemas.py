@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, Field
+
+T = TypeVar("T")
 
 
 class SubmitTaskRequest(BaseModel):
@@ -57,3 +59,34 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     components: Dict[str, Any]
+
+
+class BatchError(BaseModel):
+    """Error entry within a batch response."""
+
+    error: str
+    detail: Optional[str] = None
+    index: Optional[int] = None
+
+
+class PaginatedList(BaseModel, Generic[T]):
+    """Generic paginated list response with total count."""
+
+    items: List[T]
+    total: int
+    limit: int
+    offset: int
+
+
+class TaskUpdate(BaseModel):
+    """Real-time task update pushed over WebSocket or SSE."""
+
+    type: str
+    task_id: str
+    status: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    updated_at: Optional[str] = None
+    event_type: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
+    timestamp: Optional[str] = None

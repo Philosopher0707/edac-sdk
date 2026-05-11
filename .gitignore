@@ -11,3 +11,9 @@ docs/site/
 # Dev artifacts
 edac.db
 .claude/
+
+# IDE / editor state
+.wisp/
+.DS_Store
+ benchmarks/
+*.egg-info/

@@ -146,6 +146,18 @@ class TaskStore:
         )
         await self._db.commit()
 
+    async def count_tasks(self, status: Optional[str] = None) -> int:
+        """Return the total number of tasks (optionally filtered by status)."""
+        if status:
+            query = "SELECT COUNT(*) FROM tasks WHERE status = ?"
+            params = (status,)
+        else:
+            query = "SELECT COUNT(*) FROM tasks"
+            params = ()
+        async with self._db.execute(query, params) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
     async def list_tasks(
         self,
         status: Optional[str] = None,
@@ -162,6 +174,18 @@ class TaskStore:
         async with self._db.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return [self._row_to_task(row) for row in rows]
+
+    async def count_tasks(self, status: Optional[str] = None) -> int:
+        """Return total number of tasks, optionally filtered by status."""
+        if status:
+            query = "SELECT COUNT(*) FROM tasks WHERE status = ?"
+            params = (status,)
+        else:
+            query = "SELECT COUNT(*) FROM tasks"
+            params = ()
+        async with self._db.execute(query, params) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else 0
 
     async def add_event(self, task_id: str, event_type: str, payload: Dict[str, Any]) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -232,6 +256,12 @@ class TaskStore:
             await self._db.commit()
             return True
         return False
+
+    async def count_dlq(self) -> int:
+        """Return the total number of dead-letter queue entries."""
+        async with self._db.execute("SELECT COUNT(*) FROM dead_letter") as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else 0
 
     async def list_dlq(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         async with self._db.execute(
@@ -416,6 +446,17 @@ class PostgresTaskStore:
                 )
             return [self._pg_row_to_task(row) for row in rows]
 
+    async def count_tasks(self, status: Optional[str] = None) -> int:
+        """Return total number of tasks, optionally filtered by status."""
+        async with self._pool.acquire() as conn:
+            if status:
+                row = await conn.fetchrow(
+                    "SELECT COUNT(*) FROM tasks WHERE status = $1", status
+                )
+            else:
+                row = await conn.fetchrow("SELECT COUNT(*) FROM tasks")
+            return row["count"] if row else 0
+
     async def add_event(self, task_id: str, event_type: str, payload: Dict[str, Any]) -> None:
         now = datetime.now(timezone.utc).isoformat()
         async with self._pool.acquire() as conn:
@@ -514,6 +555,12 @@ class PostgresTaskStore:
                 }
                 for row in rows
             ]
+
+    async def count_dlq(self) -> int:
+        """Return total number of dead letter queue entries."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT COUNT(*) FROM dead_letter")
+            return row["count"] if row else 0
 
     def _pg_row_to_task(self, row) -> TaskRecord:
         return TaskRecord(

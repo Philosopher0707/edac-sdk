@@ -22,12 +22,13 @@ from edac.server.auth import (
     ACTION_RESTART_AGENT,
     ACTION_RESUME_AGENT,
 )
-from edac.server.schemas import AgentInfo, CreateAgentRequest
+from edac.server.schemas import AgentInfo, BatchError, CreateAgentRequest
 
 router = APIRouter()
 
 
 # ── Helpers ──
+
 
 def _to_info(agent) -> AgentInfo:
     """Build an *AgentInfo* from a live :class:`~edac.agent.lifecycle.AgentInstance`."""
@@ -40,11 +41,26 @@ def _to_info(agent) -> AgentInfo:
     )
 
 
+def _paginated_response(items: List[Any], total: int, limit: int, offset: int) -> Dict[str, Any]:
+    """Build a paginated response dict with metadata headers."""
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 # ── Endpoints ──
 
-@router.get("/agents", response_model=List[AgentInfo])
-async def list_agents(request: Request) -> List[AgentInfo]:
-    """List all active agents."""
+
+@router.get("/agents")
+async def list_agents(
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[AgentInfo]:
+    """List all active agents (paginated)."""
     app = request.app
     user = getattr(request.state, "user", None)
 
@@ -55,14 +71,25 @@ async def list_agents(request: Request) -> List[AgentInfo]:
         )
 
     runtime: AgentRuntime = app.state.runtime
-    agents = runtime.list_agents()
+    all_agents = runtime.list_agents()
+    total = len(all_agents)
+    paginated = all_agents[offset : offset + limit]
+
     log_audit(
         ACTION_LIST_AGENTS,
         "/agents",
         "success",
         user=getattr(user, "name", None),
     )
-    return [_to_info(a) for a in agents]
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content=[_to_info(a).model_dump() for a in paginated],
+        headers={
+            "X-Total-Count": str(total),
+            "X-Limit": str(limit),
+            "X-Offset": str(offset),
+        },
+    )
 
 
 @router.post("/agents", response_model=AgentInfo, status_code=status.HTTP_201_CREATED)
@@ -113,6 +140,78 @@ async def create_agent(
         user=getattr(user, "name", None),
     )
     return _to_info(agent)
+
+
+@router.post("/agents/batch")
+async def create_agents_batch(
+    reqs: List[CreateAgentRequest],
+    request: Request,
+) -> List[Dict[str, Any]]:
+    """Create multiple agents in a single request.
+
+    Returns a list where each element is either an *AgentInfo* dict or a
+    *BatchError* dict (containing ``error`` and ``detail`` keys).
+    """
+    app = request.app
+    user = getattr(request.state, "user", None)
+    runtime: AgentRuntime = app.state.runtime
+    results: List[Dict[str, Any]] = []
+
+    for req in reqs:
+        if user and not app.state.auth.is_allowed(user, ACTION_CREATE_AGENT):
+            results.append({"error": "Permission denied", "detail": ACTION_CREATE_AGENT})
+            continue
+        config = AgentConfig(
+            name=req.name,
+            agent_type=req.agent_type,
+            model=req.model,
+            skills=req.skills or [],
+            goal=req.goal,
+            sandbox=req.sandbox,
+            max_restarts=req.max_restarts,
+        )
+        try:
+            agent = await runtime.spawn(config)
+            results.append(_to_info(agent).model_dump())
+        except Exception as exc:
+            results.append({"error": "Failed to spawn agent", "detail": str(exc)})
+
+    return results
+
+
+@router.delete("/agents/batch")
+async def delete_agents_batch(
+    payload: Dict[str, Any],
+    request: Request,
+) -> List[Dict[str, str]]:
+    """Delete multiple agents in a single request.
+
+    Request body: ``{"agent_ids": ["id1", "id2", ...]}``
+    """
+    app = request.app
+    user = getattr(request.state, "user", None)
+    runtime: AgentRuntime = app.state.runtime
+    agent_ids = payload.get("agent_ids", [])
+    results: List[Dict[str, str]] = []
+
+    for agent_id in agent_ids:
+        if user and not app.state.auth.is_allowed(user, ACTION_DELETE_AGENT):
+            results.append({"agent_id": agent_id, "status": "denied"})
+            continue
+        agent = runtime.get_agent(agent_id)
+        if agent is None:
+            results.append({"agent_id": agent_id, "status": "not_found"})
+            continue
+        await runtime.kill(agent_id, reason="batch_delete")
+        log_audit(
+            ACTION_DELETE_AGENT,
+            f"/agents/{agent_id}",
+            "success",
+            user=getattr(user, "name", None),
+        )
+        results.append({"agent_id": agent_id, "status": "deleted"})
+
+    return results
 
 
 @router.get("/agents/{agent_id}", response_model=AgentInfo)

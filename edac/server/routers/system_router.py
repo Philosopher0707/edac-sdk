@@ -59,7 +59,7 @@ async def health(request: Request) -> HealthResponse:
     log_audit(ACTION_GET_HEALTH, "/health", "success")
     return HealthResponse(
         status=overall,
-        version="0.2.0",
+        version="0.3.0",
         components=components,
     )
 
@@ -79,8 +79,24 @@ async def metrics(request: Request) -> str:
 
 
 @router.get("/dlq")
-async def list_dlq(request: Request, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-    """List dead letter queue entries."""
+async def list_dlq(
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """List dead letter queue entries with pagination."""
     app = request.app
     store: TaskStore = app.state.store
-    return await store.list_dlq(limit=limit, offset=offset)
+    records = await store.list_dlq(limit=limit, offset=offset)
+    total = await store.count_dlq()
+
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        content=records,
+        headers={
+            "X-Total-Count": str(total),
+            "X-Limit": str(limit),
+            "X-Offset": str(offset),
+        },
+    )

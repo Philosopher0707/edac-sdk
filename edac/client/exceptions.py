@@ -25,3 +25,15 @@ class EdacAuthError(EdacClientError):
 
 class EdacNotFoundError(EdacClientError):
     """Resource not found (404)."""
+
+
+class EdacRetryExhausted(EdacClientError):
+    """All retry attempts were exhausted."""
+
+    def __init__(self, message: str, *, last_status_code: Optional[int] = None, attempts: int = 0) -> None:
+        super().__init__(message, status_code=last_status_code)
+        self.attempts = attempts
+
+
+class EdacStreamError(EdacClientError):
+    """Error during SSE or WebSocket streaming."""
