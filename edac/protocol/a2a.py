@@ -146,6 +146,14 @@ class A2ABridge:
         cards = [self.generate_agent_card(c) for c in self.registry.list_cards()]
         return json.dumps(cards, indent=2)
 
+    def get_card(self, name: str) -> Optional[Dict[str, Any]]:
+        """Fetch a single agent card by name."""
+        # Registry cards are keyed by agent_id; search by name instead.
+        for card in self.registry.list_cards():
+            if card.name == name:
+                return self.generate_agent_card(card)
+        return None
+
     # ── Task helpers ──
 
     def create_task(self, task_id: str, message: Optional[A2AMessage] = None) -> A2ATask:

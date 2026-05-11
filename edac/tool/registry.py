@@ -128,6 +128,16 @@ class ToolRegistry:
         resolved = self._resolve_secrets(arguments, correlation_id)
 
         try:
+            # Approval gate check for destructive tools
+            if record.spec.destructive:
+                mgr = getattr(self, '_approval_manager', None)
+                if mgr is not None:
+                    gate = mgr.check(f"tool.{name}")
+                    if gate is not None:
+                        error_msg = f"Tool '{name}' requires approval: {gate.prompt}"
+                        await self._emit_tool_event(name, arguments, EventType.TOOL_ERROR, error=error_msg)
+                        raise ToolError(error_msg)
+
             if record.spec.sandbox_required:
                 from edac.security.sandbox import SecureSandbox
                 sandbox = SecureSandbox()

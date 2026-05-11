@@ -39,7 +39,7 @@ from edac.server.config import ServerConfig
 from edac.server.context import RuntimeContext
 from edac.server.executor import AgentExecutor
 from edac.server.rate_limiter import RateLimiter
-from edac.server.routers import agents_router, protocol_router, system_router, tasks_router
+from edac.server.routers import agents_router, approval_router, memory_router, protocol_router, system_router, tasks_router
 from edac.server.store import create_store
 from edac.server.tracing import clear_request_id, get_request_id, set_request_id
 from edac.observability.tracing import Tracer
@@ -72,6 +72,17 @@ async def lifespan(app: FastAPI):
     ollama = OllamaProvider(base_url=cfg.ollama_base_url, default_model=cfg.ollama_default_model)
     registry.register("ollama", ollama, fallback=True)
 
+    # Approval gates (HITL)
+    from edac.human.approval import ApprovalManager, ApprovalGate
+    approval_manager = ApprovalManager()
+    # Seed a default gate for destructive actions
+    approval_manager.add_gate(
+        ApprovalGate(
+            trigger_on="tool.*",
+            prompt="A destructive tool action requires approval.",
+        )
+    )
+
     # Circuit breakers per provider
     cb_ollama = CircuitBreaker("ollama", failure_threshold=cfg.circuit_breaker_threshold, recovery_timeout=cfg.circuit_breaker_recovery)
     app.state.cb_ollama = cb_ollama
@@ -100,6 +111,7 @@ async def lifespan(app: FastAPI):
 
     # Tool registry + security
     tool_registry = ToolRegistry(bus=bus)
+    tool_registry._approval_manager = approval_manager
     guardrail = PromptGuardrail()
     secrets = SecretsManager()
     secrets.load_env()
@@ -176,6 +188,7 @@ async def lifespan(app: FastAPI):
         a2a_bridge=a2a_bridge,
         sse_bridge=sse_bridge,
         tracer=tracer,
+        approval_manager=approval_manager,
     )
 
     app.state.bus = bus
@@ -197,6 +210,7 @@ async def lifespan(app: FastAPI):
     app.state.a2a_bridge = a2a_bridge
     app.state.sse_bridge = sse_bridge
     app.state.tracer = tracer
+    app.state.approval_manager = approval_manager
     app.state.websockets: Dict[str, List[Any]] = {}
 
     logger.info("EDAC server started")
@@ -295,6 +309,8 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     # Mount routers
     app.include_router(tasks_router.router)
     app.include_router(agents_router.router)
+    app.include_router(approval_router.router)
+    app.include_router(memory_router.router)
     app.include_router(system_router.router)
     app.include_router(protocol_router.router)
 

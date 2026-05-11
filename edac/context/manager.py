@@ -3,15 +3,22 @@
 Tracks token usage per agent, session, and plan.
 Routes to cheaper models for simple subtasks.
 Coordinates with ShortTermMemory for window management.
+Manages WorkingMemory (per-step scratchpad), LongTermMemory (facts),
+and EpisodicMemory (event trajectory).
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from edac.event.schema import Event
+from edac.memory.episodic import EpisodicMemory
+from edac.memory.long_term import LongTermMemory
 from edac.memory.short_term import ShortTermMemory, WindowEntry
+from edac.memory.working import WorkingMemory
 from edac.context.budget import BudgetTracker
 from edac.context.compressor import ContextCompressor
 from edac.model import ChatMessage, ModelRegistry
@@ -32,12 +39,20 @@ class ContextConfig:
     default_model: str = "claude-sonnet-4-6"
     premium_model: str = "claude-opus-4-7"
     default_provider: str = "ollama"
+    # memory persistence
+    episodic_path: Optional[Path] = None
+    enable_augmentation: bool = True
 
 
 class ContextManager:
     """Manages context windows, token budgets, and model routing."""
 
-    def __init__(self, config: Optional[ContextConfig] = None, registry: Optional[ModelRegistry] = None, metrics: Optional[Any] = None):
+    def __init__(
+        self,
+        config: Optional[ContextConfig] = None,
+        registry: Optional[ModelRegistry] = None,
+        metrics: Optional[Any] = None,
+    ):
         self.config = config or ContextConfig()
         self.registry = registry or ModelRegistry()
         self.metrics = metrics
@@ -47,11 +62,18 @@ class ContextManager:
             plan_limit=self.config.max_tokens_per_plan,
         )
         self._windows: Dict[str, ShortTermMemory] = {}
+        self._working: Dict[str, WorkingMemory] = {}
+        self._long_term = LongTermMemory()
+        self._episodic = EpisodicMemory(
+            path=self.config.episodic_path,
+        )
         self._compressor: Optional[ContextCompressor] = None
         if self.config.compression_enabled:
             self._compressor = ContextCompressor(
                 target_tokens=self.config.compression_trigger_tokens,
             )
+
+    # ── Short-Term Memory ──
 
     def get_window(self, agent_id: str) -> ShortTermMemory:
         if agent_id not in self._windows:
@@ -79,8 +101,95 @@ class ContextManager:
     def get_context(self, agent_id: str) -> str:
         return self.get_window(agent_id).get_text()
 
+    def clear_window(self, agent_id: str) -> None:
+        self._windows.pop(agent_id, None)
+
+    # ── Working Memory ──
+
+    def get_working(self, agent_id: str) -> WorkingMemory:
+        if agent_id not in self._working:
+            self._working[agent_id] = WorkingMemory(agent_id=agent_id)
+        return self._working[agent_id]
+
+    # ── Long-Term Memory ──
+
+    def get_long_term(self) -> LongTermMemory:
+        return self._long_term
+
+    def promote_to_long_term(
+        self,
+        agent_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """Move select window entries into long-term memory and return count stored."""
+        window = self.get_window(agent_id)
+        stored = 0
+        for entry in window.get_window():
+            # Skip assistant-generated content (generated, not factual)
+            if entry.role in ("system", "assistant"):
+                continue
+            content = f"[{entry.role}] {entry.content}"
+            self._long_term.store(
+                content=content,
+                metadata={
+                    "agent_id": agent_id,
+                    "role": entry.role,
+                    **(entry.metadata or {}),
+                    **(metadata or {}),
+                },
+                source=entry.role,
+            )
+            stored += 1
+        return stored
+
+    def store_long_term(
+        self,
+        content: str,
+        embedding: Optional[List[float]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        source: str = "api",
+    ) -> str:
+        return self._long_term.store(
+            content=content,
+            embedding=embedding,
+            metadata=metadata,
+            source=source,
+        )
+
+    # ── Episodic Memory ──
+
+    def get_episodic(self) -> EpisodicMemory:
+        return self._episodic
+
+    def record_episode(self, event: Event) -> None:
+        """Append an event to the episodic log."""
+        self._episodic.append(event)
+
+    # ── Context augmentation for LLM calls ──
+
+    def _augment_prompt(self, agent_id: str, prompt: str) -> str:
+        """Injects relevant long-term facts and episodic snippets into the prompt."""
+        parts: List[str] = []
+        # Retrieve matching long-term memories via text search
+        memories = self._long_term.search_text(prompt, top_k=3)
+        if memories:
+            parts.append("--- Retrieved Context ---")
+            for m in memories:
+                parts.append(f"- {m.content}")
+            parts.append("--- End Retrieved Context ---\n")
+        # Retrieve recent episodic notes (no embedding yet)
+        recent = self._episodic.get_by_type("system.log")
+        if recent and len(recent) > 0:
+            parts.append("--- Recent Events ---")
+            for e in recent[-3:]:
+                parts.append(f"- {e.source}: {str(e.payload)[:200]}")
+            parts.append("--- End Recent Events ---\n")
+        parts.append(prompt)
+        return "\n".join(parts)
+
     def clear(self, agent_id: str) -> None:
         self._windows.pop(agent_id, None)
+        self._working.pop(agent_id, None)
         self._budget.reset_agent(agent_id)
 
     def select_model(self, agent_id: str, task_complexity: str = "normal") -> str:
@@ -122,6 +231,10 @@ class ContextManager:
                 chat_role = "assistant"
             messages.append(ChatMessage(role=chat_role, content=entry.content))
 
+        # Augment prompt with long-term + episodic context before injection
+        if self.config.enable_augmentation:
+            prompt = self._augment_prompt(agent_id, prompt)
+
         messages.append(ChatMessage(role="user", content=prompt))
 
         model = model or self.select_model(agent_id)
@@ -146,5 +259,8 @@ class ContextManager:
         return {
             "budget": self._budget.snapshot(),
             "active_windows": len(self._windows),
+            "active_working": len(self._working),
+            "long_term_entries": len(self._long_term._entries),
+            "episodic_entries": len(self._episodic._events),
             "providers": self.registry.list_providers(),
         }
