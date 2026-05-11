@@ -101,7 +101,13 @@ class TestWorkflowRunner:
         from edac.event.bus import EventBus
 
         bus = EventBus()
+        await bus.start()
         runtime = AgentRuntime(bus)
+        await runtime.start()
+
+        from edac.agent.lifecycle import AgentConfig
+        planner = await runtime.spawn(AgentConfig(name="planner"))
+        coder = await runtime.spawn(AgentConfig(name="coder"))
 
         wf = Workflow([
             {"agent": "planner", "task": "plan"},
@@ -110,6 +116,18 @@ class TestWorkflowRunner:
 
         from edac.sdk.workflow import WorkflowRunner
         runner = WorkflowRunner(runtime, wf)
-        # Without real agents registered, this raises ValueError
-        with pytest.raises(ValueError):
-            await runner.run()
+        results = await runner.run()
+
+        assert "agent_id" in results[0]
+        assert results[0]["agent_id"] == planner.agent_id
+        assert "agent_id" in results[1]
+        assert results[1]["agent_id"] == coder.agent_id
+
+        assert len(results) == 2
+        assert results[0]["agent"] == "planner"
+        assert results[0]["task"] == "plan"
+        assert results[1]["agent"] == "coder"
+        assert results[1]["task"] == "code"
+
+        await runtime.stop()
+        await bus.stop()

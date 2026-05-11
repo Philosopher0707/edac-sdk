@@ -134,9 +134,26 @@ class ToolRegistry:
                 if mgr is not None:
                     gate = mgr.check(f"tool.{name}")
                     if gate is not None:
-                        error_msg = f"Tool '{name}' requires approval: {gate.prompt}"
-                        await self._emit_tool_event(name, arguments, EventType.TOOL_ERROR, error=error_msg)
-                        raise ToolError(error_msg)
+                        await self._emit_tool_event(
+                            name,
+                            arguments,
+                            EventType.HUMAN_APPROVAL,
+                            error=gate.prompt,
+                        )
+                        try:
+                            await asyncio.wait_for(
+                                gate.wait_for_approval(),
+                                timeout=gate.timeout_seconds,
+                            )
+                        except asyncio.TimeoutError:
+                            error_msg = (
+                                f"Tool '{name}' approval timed out after "
+                                f"{gate.timeout_seconds}s: {gate.prompt}"
+                            )
+                            await self._emit_tool_event(
+                                name, arguments, EventType.TOOL_TIMEOUT, error=error_msg
+                            )
+                            raise ToolTimeout(error_msg)
 
             if record.spec.sandbox_required:
                 from edac.security.sandbox import SecureSandbox
@@ -220,7 +237,7 @@ class ToolRegistry:
             source=f"tool:{tool_name}",
             topic="tool.events",
             payload=payload,
-            priority=EventPriority.HIGH if event_type in (EventType.TOOL_ERROR, EventType.TOOL_TIMEOUT) else EventPriority.NORMAL,
+            priority=EventPriority.HIGH if event_type in (EventType.TOOL_ERROR, EventType.TOOL_TIMEOUT, EventType.HUMAN_APPROVAL) else EventPriority.NORMAL,
         )
         await self.bus.emit(event)
 

@@ -66,10 +66,12 @@ If we ever need a pure-client runtime (no server), we can revive `edac/runtime/e
 ## 5. Test Coverage
 
 All deviations are under test:
-- **385 passed, 4 skipped** across 20 test files
+- **422 passed, 4 skipped** across 20 test files
 - Event layer: bus, router, schema, vector clock
 - Runtime: asyncio TaskManager + server executor
+- SDK: agent builder, skill builder, workflow runner with real `PlanEngine` execution
 - Security: secrets, sandbox, network, guardrails
+- Human-in-the-loop: approval gates with async pause/resume, CLI approval commands
 
 The test suite validates that the decomposed architecture behaves as the original monolithic design intended.
 

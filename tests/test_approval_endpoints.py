@@ -73,7 +73,7 @@ class TestToolRegistryApproval:
         await bus.start()
         registry = ToolRegistry(bus=bus)
         mgr = ApprovalManager()
-        mgr.add_gate(ApprovalGate(trigger_on="tool.destructive", prompt="Danger"))
+        mgr.add_gate(ApprovalGate(trigger_on="tool.destructive", prompt="Danger", timeout_seconds=0.01))
         registry._approval_manager = mgr
         yield registry
         await bus.stop()
@@ -90,7 +90,7 @@ class TestToolRegistryApproval:
             handler,
         )
 
-        with pytest.raises(Exception, match="requires approval"):
+        with pytest.raises(Exception, match="approval timed out"):
             await registry.execute("destructive", {"x": 1})
 
     @pytest.mark.asyncio

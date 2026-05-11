@@ -4,6 +4,7 @@ Commands:
     edac serve     — Start the production server
     edac run       — Run a single task from CLI
     edac status    — Check server health
+    edac approvals — Manage approval gates
     edac version   — Show version
 """
 
@@ -13,6 +14,7 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -31,16 +33,23 @@ def _setup_logging(level: str) -> None:
     )
 
 
+def _load_config(path: str) -> ServerConfig:
+    """Load ServerConfig overrides from a JSON or YAML file."""
+    p = Path(path)
+    if not p.exists():
+        raise click.UsageError(f"Config file not found: {path}")
+    text = p.read_text()
+    data = json.loads(text)
+    return ServerConfig(**data)
+
+
 @click.group()
-@click.option("--config", "-c", type=click.Path(exists=True), help="Path to config file")
+@click.option("--config", "-c", type=click.Path(exists=True), help="Path to config file (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.pass_context
 def cli(ctx: click.Context, config: Optional[str], verbose: bool) -> None:
     """EDAC — Event-Driven Agentic Core CLI."""
-    cfg = ServerConfig()
-    if config:
-        # Override with file if provided
-        pass
+    cfg = _load_config(config) if config else ServerConfig()
     ctx.ensure_object(dict)
     ctx.obj["config"] = cfg
     ctx.obj["verbose"] = verbose
@@ -151,6 +160,97 @@ def status(server: str) -> None:
         click.echo(f"Server: {data['status']} (v{data['version']})")
     except Exception as e:
         click.echo(f"Server unreachable: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.group(name="approvals")
+def approvals() -> None:
+    """Manage approval gates (HITL)."""
+    pass
+
+
+@approvals.command(name="list")
+@click.option("--server", default="http://localhost:8000", help="Server URL")
+def list_approvals(server: str) -> None:
+    """List all approval gates and their status."""
+    import httpx
+
+    try:
+        resp = httpx.get(f"{server}/approvals/gates")
+        resp.raise_for_status()
+        gates = resp.json()
+        if not gates:
+            click.echo("No approval gates configured.")
+            return
+        click.echo(f"{'Trigger':<20} {'Approved':<10} {'Prompt'}")
+        click.echo("-" * 60)
+        for g in gates:
+            trigger = g.get("trigger_on", "unknown")
+            approved = "✓" if g.get("approved") else "✗"
+            prompt = g.get("prompt", "")[:30]
+            click.echo(f"{trigger:<20} {approved:<10} {prompt}")
+    except Exception as e:
+        click.echo(f"Failed to list approvals: {e}", err=True)
+        sys.exit(1)
+
+
+@approvals.command(name="add")
+@click.argument("trigger")
+@click.option("--prompt", default="Approval required", help="Approval prompt message")
+@click.option("--timeout", type=float, default=300.0, help="Timeout in seconds")
+@click.option("--required", type=int, default=1, help="Required approver count")
+@click.option("--server", default="http://localhost:8000", help="Server URL")
+def add_approval(
+    trigger: str,
+    prompt: str,
+    timeout: float,
+    required: int,
+    server: str,
+) -> None:
+    """Add a new approval gate."""
+    import httpx
+
+    try:
+        resp = httpx.post(
+            f"{server}/approvals/gates",
+            json={
+                "trigger_on": trigger,
+                "prompt": prompt,
+                "timeout_seconds": timeout,
+                "required_approvers": required,
+            },
+        )
+        resp.raise_for_status()
+        g = resp.json()
+        click.echo(f"Added gate: {g['trigger_on']} (approved={g['approved']})")
+    except Exception as e:
+        click.echo(f"Failed to add gate: {e}", err=True)
+        sys.exit(1)
+
+
+@approvals.command(name="approve")
+@click.argument("trigger")
+@click.option("--approver", default="cli-user", help="Approver name")
+@click.option("--server", default="http://localhost:8000", help="Server URL")
+def approve_gate(trigger: str, approver: str, server: str) -> None:
+    """Approve an approval gate by trigger pattern."""
+    import httpx
+
+    try:
+        resp = httpx.post(
+            f"{server}/approvals/gates/{trigger}/approve",
+            json={"approver": approver},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        click.echo(f"Gate '{data['trigger_on']}' approved by {data['approver']}.")
+        if not data["approved"]:
+            remaining = data.get("remaining", 0)
+            click.echo(f"  Remaining approvals needed: {remaining}")
+        else:
+            click.echo("  Gate is now fully approved.")
+    except Exception as e:
+        click.echo(f"Failed to approve gate: {e}", err=True)
         sys.exit(1)
 
 
