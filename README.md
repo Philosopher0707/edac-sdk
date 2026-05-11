@@ -1,16 +1,22 @@
 # EDAC — Event-Driven Agentic Core
 
-A lightweight, event-driven SDK for building agentic systems in Python.
+A lightweight, event-driven SDK and server for building agentic systems in Python.
 
 ## Install
 
 ```bash
-pip install -e .
+pip install edac
+```
+
+For streaming support (WebSocket task watching):
+
+```bash
+pip install edac[stream]
 ```
 
 Requires Python 3.11+.
 
-## Quickstart
+## Quickstart (Async)
 
 ```python
 import asyncio
@@ -29,10 +35,7 @@ async def greeter(event):
 
 async def main():
     async with EventBus() as bus:
-        # subscribe greeter to requests
         bus.subscribe(greeter, topics=["agent.greeter.requests"])
-
-        # emit a request
         req = create_event(
             EventType.AGENT_SPAWN,
             source="human:dev",
@@ -43,6 +46,99 @@ async def main():
         await asyncio.sleep(0.1)
 
 asyncio.run(main())
+```
+
+## Sync Client
+
+```python
+from edac.client.sync_client import EdacClientSync
+
+client = EdacClientSync("http://localhost:8000", api_key="sk-xxx")
+
+# All async methods exposed synchronously via a background thread
+agents = client.list_agents()  # returns PaginatedList[Agent]
+task = client.submit_task(goal="write a haiku")
+client.close()
+```
+
+## Streaming
+
+### SSE Events
+```python
+async for event in client.stream_events(topics=["agent.results"]):
+    print(event)
+```
+
+### WebSocket Task Watching (requires `edac[stream]`)
+```python
+# Async
+async for update in client.watch_task("task-123"):
+    print(update)
+
+# Sync
+for update in sync_client.watch_task("task-123"):
+    print(update)
+```
+
+## CLI
+
+```bash
+# Server
+edac server start
+
+# Submit a task
+edac tasks submit --goal "write a haiku"
+
+# Submit and watch via WebSocket
+edac run --watch --goal "write a haiku"
+
+# Follow SSE event stream
+edac events follow --topics agent.results --count 10
+
+# Watch a specific task
+edac events watch <task_id>
+
+# List agents/tasks
+edac agents list
+edac tasks list
+
+# Batch submit
+edac tasks batch --goals "goal1" "goal2"
+
+# Status
+edac status
+```
+
+## Pagination & Batch Operations
+
+List endpoints return `PaginatedList[T]`:
+
+```python
+page = client.list_tasks(limit=10, offset=0)
+print(page.items)   # list of tasks
+print(page.total)   # total count
+```
+
+Batch submit tasks:
+
+```python
+tasks = client.submit_tasks_batch([
+    {"goal": "task 1"},
+    {"goal": "task 2"},
+])
+```
+
+## Retry & Error Handling
+
+The client automatically retries on 429, 500, 502, 503, 504 with exponential backoff.
+
+```python
+from edac.client.client import EdacClient, RetryConfig
+
+client = EdacClient(
+    "http://localhost:8000",
+    retry=RetryConfig(max_retries=5, backoff_base=1.0, backoff_max=30.0)
+)
 ```
 
 ## Architecture
@@ -61,49 +157,6 @@ asyncio.run(main())
 | Protocol | `edac.protocol` | A2A bridge, MCP bridge, SSE endpoint |
 | SDK | `edac.sdk` | Agent builder, workflow runner, decorators |
 | Security | `edac.security` | Guardrails, network proxy, sandbox, secrets |
-
-## Decorators
-
-```python
-from edac.sdk import agent, skill, workflow
-
-@agent(name="coder", model="claude-sonnet", skills=["python"], sandbox=True)
-async def coder(event):
-    ...
-
-@skill("skills/python.md")
-async def coder_with_skill(event):
-    ...
-
-@workflow([
-    {"agent": "planner", "task": "plan"},
-    {"agent": "coder", "task": "code"},
-    {"agent": "reviewer", "task": "review"},
-])
-async def dev_pipeline(event):
-    ...
-```
-
-## Secrets
-
-```python
-from edac.security.secrets import SecretsManager
-
-mgr = SecretsManager()
-mgr.set("api_key", "sk-xxx", scope="agent:prod", budget=1000)
-mgr.get("api_key", scope="agent:prod")
-mgr.rotate("api_key")
-```
-
-## A2A Protocol
-
-```python
-from edac.protocol.a2a import A2ABridge, A2ATask, A2AMessage
-
-bridge = A2ABridge(registry)
-card_json = bridge.generate_agent_card(card)
-task = bridge.create_task("task-1", A2AMessage.from_text("user", "hello"))
-```
 
 ## Interactive API Docs
 
@@ -124,7 +177,7 @@ Interactive OpenAPI docs are available at:
 python -m pytest tests/ -v
 ```
 
-422 tests across 20 test files.
+490 tests across 20+ test files.
 
 ## License
 

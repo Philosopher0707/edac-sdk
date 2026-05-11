@@ -26,6 +26,8 @@ from edac.cli.commands.tasks import tasks
 from edac.server.api import create_app
 from edac.server.config import ServerConfig
 
+EDAC_VERSION = "0.3.0"
+
 logger = logging.getLogger("edac.cli")
 
 
@@ -46,6 +48,8 @@ def _load_config(path: str) -> ServerConfig:
     return ServerConfig(**data)
 
 
+@click.version_option(version=EDAC_VERSION, prog_name="edac")
+@click.version_option(version=EDAC_VERSION, prog_name="edac")
 @click.group()
 @click.option("--config", "-c", type=click.Path(exists=True), help="Path to config file (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
