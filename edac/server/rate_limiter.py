@@ -34,6 +34,10 @@ class Bucket:
                 return True
             return False
 
+    async def release(self, tokens: float = 1.0) -> None:
+        async with self._lock:
+            self.tokens = min(self.capacity, self.tokens + tokens)
+
     async def wait_time(self, tokens: float = 1.0) -> float:
         async with self._lock:
             now = time.monotonic()
@@ -73,6 +77,11 @@ class RateLimiter:
             Bucket(capacity=self.default_capacity, refill_rate=self.default_refill),
         )
         return await bucket.acquire(tokens)
+
+    async def release(self, key: str, tokens: float = 1.0) -> None:
+        bucket = self._buckets.get(key)
+        if bucket:
+            await bucket.release(tokens)
 
     async def wait_time(self, key: str, tokens: float = 1.0) -> float:
         bucket = self._buckets.setdefault(

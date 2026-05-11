@@ -17,8 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, List, Optional
 
 from edac.event.bus import EventBus
 from edac.agent.lifecycle import (

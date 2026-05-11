@@ -13,7 +13,6 @@ import asyncio
 import json
 import logging
 import sys
-from pathlib import Path
 from typing import Optional
 
 import click
@@ -134,7 +133,7 @@ def run(
                     if task.get("error"):
                         click.echo(f"Error: {task['error']}", err=True)
                     break
-                click.echo(f".", nl=False)
+                click.echo(".", nl=False)
 
     asyncio.run(_submit())
 

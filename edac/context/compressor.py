@@ -29,7 +29,7 @@ class ContextCompressor:
         keep: List[WindowEntry] = []
         dropped: List[WindowEntry] = []
         for e in entries:
-            if e.role == "system" or e.role == "human":
+            if e.role in ("system", "user", "human"):
                 keep.append(e)
             else:
                 dropped.append(e)
@@ -39,9 +39,9 @@ class ContextCompressor:
         if summary:
             keep.insert(0, WindowEntry(role="system", content=f"[Earlier context summarized] {summary}", tokens=window._estimate_tokens(summary)))
 
+        # Bulk-construct without triggering per-add budget enforcement
         new_window = ShortTermMemory(max_tokens=window.max_tokens)
-        for e in keep:
-            new_window.add(e)
+        new_window._entries = list(keep)
         return new_window
 
     def _summarize(self, entries: List[WindowEntry]) -> str:

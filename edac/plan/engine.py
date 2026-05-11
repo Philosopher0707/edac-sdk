@@ -18,6 +18,7 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
 
 from edac.event.bus import EventBus
 from edac.event.schema import Event, EventType, EventPriority, create_event
+from edac.model import ChatMessage, ModelRegistry
 from edac.plan.dag import PlanDAG, Step, StepStatus
 from edac.plan.mutator import PlanMutator
 from edac.plan.parallelizer import Parallelizer
@@ -55,9 +56,13 @@ class PlanEngine:
         self,
         bus: EventBus,
         config: Optional[PlanConfig] = None,
+        registry: Optional[ModelRegistry] = None,
+        provider: Optional[str] = None,
     ):
         self.bus = bus
         self.config = config or PlanConfig()
+        self.registry = registry
+        self.provider = provider
         self._replan_count = 0
 
     # ── Execution ──
@@ -173,6 +178,14 @@ class PlanEngine:
         await self._emit_plan_event(plan, EventType.PLAN_REPLAN, replan_reason=reason)
         logger.info(f"Replanning ({self._replan_count}/{self.config.max_replans}): {reason}")
 
+        # Try LLM-based recovery strategy if registry is available
+        if self.registry and self._replan_count <= self.config.max_replans:
+            try:
+                await self._llm_replan(plan, mutator, reason)
+                return
+            except Exception as e:
+                logger.warning(f"LLM replanning failed, falling back to retry: {e}")
+
         # Default replan: retry failed steps
         for step in plan.list_steps():
             if step.status == StepStatus.FAILED:
@@ -184,6 +197,73 @@ class PlanEngine:
             for step in plan.list_steps():
                 if step.status == StepStatus.FAILED:
                     logger.error(f"Step {step.id} failed permanently after {self._replan_count} replans")
+
+    async def _llm_replan(
+        self,
+        plan: PlanDAG,
+        mutator: PlanMutator,
+        reason: str,
+    ) -> None:
+        """Use an LLM to generate a recovery strategy for failed steps."""
+        failed_steps = [s for s in plan.list_steps() if s.status == StepStatus.FAILED]
+        if not failed_steps:
+            return
+
+        steps_desc = "\n".join(
+            f"- {s.id}: {s.description} (error: {s.error or 'unknown'})"
+            for s in failed_steps
+        )
+        prompt = (
+            f"You are a planning engine. The following plan steps failed:\n{steps_desc}\n\n"
+            f"Replanning reason: {reason}\n\n"
+            "Respond with ONE of these strategies per failed step:\n"
+            "retry:<step_id> — retry the step as-is\n"
+            "skip:<step_id> — skip the step and continue\n"
+            "add_step:<parent_id>:<description> — add a new compensating step after the parent\n"
+            "modify_step:<step_id>:<new_description> — change the step description and retry\n\n"
+            "One command per line. Only output commands, no explanation."
+        )
+
+        prov = await self.registry.get_default()
+        if prov is None:
+            return
+        messages = [ChatMessage(role="user", content=prompt)]
+        response = await prov.chat(messages)
+        content = response.content.strip()
+
+        for line in content.splitlines():
+            line = line.strip()
+            if line.startswith("retry:"):
+                step_id = line.split(":", 1)[1].strip()
+                step = plan.get_step(step_id)
+                if step:
+                    step.status = StepStatus.PENDING
+                    step.error = None
+            elif line.startswith("skip:"):
+                step_id = line.split(":", 1)[1].strip()
+                step = plan.get_step(step_id)
+                if step:
+                    step.status = StepStatus.SKIPPED
+            elif line.startswith("modify_step:"):
+                parts = line.split(":", 2)
+                if len(parts) == 3:
+                    step_id, new_desc = parts[1].strip(), parts[2].strip()
+                    step = plan.get_step(step_id)
+                    if step:
+                        step.description = new_desc
+                        step.status = StepStatus.PENDING
+                        step.error = None
+            elif line.startswith("add_step:"):
+                parts = line.split(":", 2)
+                if len(parts) == 3:
+                    parent_id, desc = parts[1].strip(), parts[2].strip()
+                    new_step = Step(
+                        id=f"recovery_{parent_id}_{self._replan_count}",
+                        description=desc,
+                        action="agent.spawn",
+                        dependencies=[parent_id],
+                    )
+                    mutator.insert_after(parent_id, [new_step])
 
     # ── Event Emission ──
 
@@ -206,7 +286,7 @@ class PlanEngine:
         event = create_event(
             event_type=event_type,
             source="system:plan_engine",
-            topic=f"plan.events",
+            topic="plan.events",
             payload=payload,
             priority=EventPriority.HIGH if event_type in (EventType.PLAN_REPLAN, EventType.PLAN_COMPLETE) else EventPriority.NORMAL,
         )

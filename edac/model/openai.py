@@ -43,7 +43,7 @@ class OpenAIProvider(ModelProvider):
     def name(self) -> str:
         return "openai"
 
-    def is_available(self) -> bool:
+    async def is_available(self) -> bool:
         return bool(self.api_key)
 
     async def _get_session(self) -> aiohttp.ClientSession:

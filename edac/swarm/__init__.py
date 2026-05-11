@@ -53,6 +53,11 @@ class Swarm:
         coordination: str = "orchestrator-workers",
         max_parallel: int = 3,
         human_approval_on: str = "none",
+        tools: Optional[Any] = None,
+        guardrail: Optional[Any] = None,
+        secrets: Optional[Any] = None,
+        tracer: Optional[Any] = None,
+        plan_engine: Optional[PlanEngine] = None,
     ):
         self.bus = bus
         self.runtime = runtime
@@ -61,6 +66,11 @@ class Swarm:
         self.coordination = coordination
         self.max_parallel = max_parallel
         self.human_approval_on = human_approval_on
+        self.tools = tools
+        self.guardrail = guardrail
+        self.secrets = secrets
+        self.tracer = tracer
+        self.plan_engine = plan_engine
         self._results: Dict[str, Any] = {}
         self._events: List[Event] = []
 
@@ -94,7 +104,6 @@ class Swarm:
             )
             prev_id = step_id
 
-        engine = PlanEngine(self.bus)
         # Spawn agents
         agent_map: Dict[str, str] = {}
         for cfg in self.agents:
@@ -108,44 +117,39 @@ class Swarm:
             inst = await self.runtime.spawn(config)
             agent_map[cfg["name"]] = inst.agent_id
 
-        # Execute pipeline: each agent gets previous result as input
         context: Dict[str, Any] = {"goal": goal, **kwargs}
+
+        # Build step_id -> agent_cfg mapping for the executor
+        step_agent_map: Dict[str, Dict[str, Any]] = {
+            f"step-{i}": cfg for i, cfg in enumerate(self.agents)
+        }
+
+        async def step_executor(step: Step) -> Any:
+            """Execute a single plan step by invoking the corresponding agent."""
+            cfg = step_agent_map[step.id]
+            return await self._invoke_agent(cfg["name"], agent_map[cfg["name"]], context)
+
+        engine = self.plan_engine or PlanEngine(self.bus)
+        executed_plan = await engine.execute(plan, step_executor)
+
+        # Convert plan results back into SwarmResult shape
         for i, cfg in enumerate(self.agents):
             step_id = f"step-{i}"
-            step = plan.get_step(step_id)
-            step.status = StepStatus.IN_PROGRESS
-
-            await self.bus.emit(
-                create_event(
-                    EventType.PLAN_STEP_START,
-                    source=f"swarm:pipeline",
-                    topic=f"plan.pipeline.{step_id}",
-                    payload={"step_id": step_id, "agent": cfg["name"], "input": context},
-                )
-            )
-
-            # In a real system, this would await agent completion
-            # Here we simulate: agent receives context, produces result
-            result = await self._invoke_agent(cfg["name"], agent_map[cfg["name"]], context)
-            context = {"previous_result": result, **context}
-            self._results[cfg["name"]] = result
-
-            step.status = StepStatus.COMPLETED
-            await self.bus.emit(
-                create_event(
-                    EventType.PLAN_STEP_COMPLETE,
-                    source=f"swarm:pipeline",
-                    topic=f"plan.pipeline.{step_id}",
-                    payload={"step_id": step_id, "agent": cfg["name"], "result": result},
-                )
-            )
-
-        plan.mark_complete()
+            step = executed_plan.get_step(step_id)
+            if step and step.result is not None:
+                self._results[cfg["name"]] = step.result
+                if isinstance(step.result, dict) and "previous_result" in step.result:
+                    context = step.result
+            else:
+                self._results[cfg["name"]] = {"agent": cfg["name"], "status": "done"}
 
         return SwarmResult(
-            success=all(isinstance(r, dict) and not r.get("error") for r in self._results.values()),
+            success=not any(
+                isinstance(r, dict) and r.get("error")
+                for r in self._results.values()
+            ),
             artifacts=[{"agent": k, "output": v} for k, v in self._results.items()],
-            plan=plan,
+            plan=executed_plan,
             agent_results=self._results,
         )
 

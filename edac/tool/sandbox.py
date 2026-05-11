@@ -10,11 +10,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger("edac.tool.sandbox")
 
@@ -30,6 +29,7 @@ class SandboxConfig:
     timeout_seconds: float = 30.0
     memory_limit_mb: int = 512
     cpu_limit: Optional[float] = None
+    cleanup_temp_dir: bool = True
 
     def __post_init__(self):
         if self.read_only_paths is None:
@@ -123,9 +123,13 @@ class Sandbox:
                 duration_ms=round(elapsed, 2),
             )
         finally:
-            if not cwd and self._temp_dir:
-                # TODO: optionally clean up temp dir
-                pass
+            if not cwd and self._temp_dir and self.config.cleanup_temp_dir:
+                try:
+                    import shutil
+                    shutil.rmtree(self._temp_dir, ignore_errors=True)
+                    self._temp_dir = None
+                except Exception:
+                    pass
 
     def _create_temp_dir(self) -> Path:
         if self._temp_dir is None:

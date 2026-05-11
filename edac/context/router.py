@@ -6,7 +6,6 @@ Simple routing based on token budget and task complexity.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass

@@ -38,7 +38,7 @@ logger = logging.getLogger("edac.examples.model_providers")
 async def demo_ollama(registry: ModelRegistry) -> None:
     """Demo local Ollama inference."""
     provider = registry.get("ollama")
-    if not provider or not provider.is_available():
+    if not provider or not await provider.is_available():
         logger.warning("Ollama not available — skipping local demo")
         return
 
@@ -60,7 +60,7 @@ async def demo_ollama(registry: ModelRegistry) -> None:
 async def demo_anthropic(registry: ModelRegistry) -> None:
     """Demo Anthropic Claude."""
     provider = registry.get("anthropic")
-    if not provider or not provider.is_available():
+    if not provider or not await provider.is_available():
         logger.warning("Anthropic not available — skipping cloud demo")
         return
 
@@ -81,7 +81,7 @@ async def demo_anthropic(registry: ModelRegistry) -> None:
 async def demo_openai(registry: ModelRegistry) -> None:
     """Demo OpenAI GPT."""
     provider = registry.get("openai")
-    if not provider or not provider.is_available():
+    if not provider or not await provider.is_available():
         logger.warning("OpenAI not available — skipping cloud demo")
         return
 
@@ -114,7 +114,7 @@ async def demo_context_manager(registry: ModelRegistry) -> None:
     )
 
     # Check available providers
-    available = registry.get_available()
+    available = await registry.get_available()
     logger.info(f"Available providers: {available}")
 
     if not available:

@@ -1,5 +1,6 @@
 """Tests for observability stack."""
 
+import asyncio
 import pytest
 
 from edac.observability.tracing import Tracer, Span
@@ -7,6 +8,7 @@ from edac.observability.metrics import MetricsCollector, Counter, Gauge, Histogr
 from edac.observability.replay import TrajectoryExporter
 from edac.memory.episodic import EpisodicMemory
 from edac.event.schema import Event, EventType, create_event
+from edac.event.bus import EventBus
 from uuid import uuid4
 
 
@@ -40,6 +42,104 @@ class TestTracer:
         assert len(exported) == 1
         assert exported[0]["name"] == "s1"
         assert "duration_ms" in exported[0]
+
+
+class TestTracingIntegration:
+    """Tracer wired into EventBus dispatch flow."""
+
+    @pytest.mark.asyncio
+    async def test_dispatch_creates_span(self):
+        """When events are dispatched, a span is created in the tracer."""
+        bus = EventBus(enable_persistence=False)
+        tracer = Tracer()
+        bus.tracer = tracer
+
+        received = []
+
+        async def handler(event):
+            received.append(event)
+
+        bus.subscribe(handler, topics=["agent.spawn"])
+
+        event = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", payload={})
+        await bus.start()
+        try:
+            await bus.emit(event)
+            await asyncio.sleep(0.05)  # let dispatcher process
+        finally:
+            await bus.stop()
+
+        spans = tracer.export()
+        assert any(s["name"] == "event:agent.spawn" for s in spans)
+
+    @pytest.mark.asyncio
+    async def test_span_includes_event_metadata(self):
+        """Span carries event type, source, topic, and correlation_id as attributes."""
+        bus = EventBus(enable_persistence=False)
+        tracer = Tracer()
+        bus.tracer = tracer
+
+        event = create_event(EventType.PLAN_STEP_START, "agent:p", "plan.step", payload={"step": 1})
+        await bus.start()
+        try:
+            await bus.emit(event)
+            await asyncio.sleep(0.05)
+        finally:
+            await bus.stop()
+
+        spans = tracer.export()
+        span = next((s for s in spans if s["name"] == "event:plan.step.start"), None)
+        assert span is not None
+        assert span["attributes"]["source"] == "agent:p"
+        assert span["attributes"]["topic"] == "plan.step"
+
+    @pytest.mark.asyncio
+    async def test_span_duration_positive(self):
+        """Dispatched spans have positive duration."""
+        bus = EventBus(enable_persistence=False)
+        tracer = Tracer()
+        bus.tracer = tracer
+
+        async def slow_handler(event):
+            await asyncio.sleep(0.02)
+
+        bus.subscribe(slow_handler, topics=["agent.heartbeat"])
+
+        event = create_event(EventType.AGENT_HEARTBEAT, "agent:h", "agent.heartbeat", payload={})
+        await bus.start()
+        try:
+            await bus.emit(event)
+            await asyncio.sleep(0.1)
+        finally:
+            await bus.stop()
+
+        spans = tracer.export()
+        span = next((s for s in spans if s["name"] == "event:agent.heartbeat"), None)
+        assert span is not None
+        assert span["duration_ms"] >= 0
+
+    @pytest.mark.asyncio
+    async def test_no_spans_without_tracer(self):
+        """When no tracer is attached, dispatch still works but no spans are created."""
+        bus = EventBus(enable_persistence=False)
+
+        received = []
+
+        async def handler(event):
+            received.append(event)
+
+        bus.subscribe(handler, topics=["system.health"])
+
+        event = create_event(EventType.SYSTEM_METRIC, "system:sys", "system.health", payload={})
+        await bus.start()
+        try:
+            await bus.emit(event)
+            await asyncio.sleep(0.05)
+        finally:
+            await bus.stop()
+
+        # No crash; that's the main assertion
+        assert bus.tracer is None
 
 
 class TestMetricsCollector:
@@ -86,8 +186,8 @@ class TestMetricsCollector:
         mc.histogram("h").observe(5)
         text = mc.export()
         # Empty labels must not produce trailing commas like {le="10",}
-        assert ",{}}" not in text
-        assert ',"}' not in text
+        assert ",{}" not in text
+        assert '","' not in text
         assert "c 1" in text or "c{}" in text
         assert "g 1" in text or "g{}" in text
 

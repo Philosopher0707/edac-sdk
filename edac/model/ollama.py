@@ -40,12 +40,12 @@ class OllamaProvider(ModelProvider):
     def name(self) -> str:
         return "ollama"
 
-    def is_available(self) -> bool:
-        """Check if ollama server is reachable."""
-        import urllib.request
+    async def is_available(self) -> bool:
+        """Check if ollama server is reachable (async)."""
         try:
-            urllib.request.urlopen(f"{self.base_url}/api/tags", timeout=2)
-            return True
+            session = await self._get_session()
+            async with session.get(f"{self.base_url}/api/tags", timeout=aiohttp.ClientTimeout(total=2)) as resp:
+                return resp.status == 200
         except Exception:
             return False
 

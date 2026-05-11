@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -203,11 +204,20 @@ class EventBus:
         default_priority: EventPriority = EventPriority.NORMAL,
         enable_persistence: bool = True,
         persistence_path: Optional[str] = None,
+        redis_url: Optional[str] = None,
+        tracer: Optional[Any] = None,
     ):
         self.max_queue_depth = max_queue_depth
         self.default_priority = default_priority
         self.enable_persistence = enable_persistence
         self.persistence_path = persistence_path
+        self.redis_url = redis_url
+        self.tracer = tracer
+        
+        # Redis state
+        self._redis: Optional[Any] = None
+        self._redis_pubsub: Optional[Any] = None
+        self._redis_task: Optional[asyncio.Task] = None
         
         # EventPriority queues: one per priority level
         # Higher priority = processed first
@@ -253,6 +263,24 @@ class EventBus:
             self._dispatcher_loop(),
             name="event_bus_dispatcher"
         )
+        
+        # Start Redis pub/sub if configured
+        if self.redis_url:
+            try:
+                import redis.asyncio as aioredis
+                self._redis = await aioredis.from_url(self.redis_url, decode_responses=True)
+                self._redis_pubsub = self._redis.pubsub()
+                await self._redis_pubsub.subscribe("edac:events")
+                self._redis_task = asyncio.create_task(
+                    self._redis_listener_loop(),
+                    name="event_bus_redis_listener"
+                )
+                logger.info("Event bus Redis pub/sub started")
+            except Exception as e:
+                logger.warning(f"Failed to connect to Redis: {e}")
+                self._redis = None
+                self._redis_pubsub = None
+        
         logger.info("Event bus started")
     
     async def stop(self, timeout: float = 30.0) -> None:
@@ -285,12 +313,29 @@ class EventBus:
                 await self._dispatcher_task
             except asyncio.CancelledError:
                 pass
+        
+        # Stop Redis listener
+        if self._redis_task:
+            self._redis_task.cancel()
+            try:
+                await self._redis_task
+            except asyncio.CancelledError:
+                pass
+        
+        if self._redis_pubsub:
+            await self._redis_pubsub.unsubscribe("edac:events")
+            await self._redis_pubsub.close()
+        
+        if self._redis:
+            await self._redis.close()
 
         logger.info("Event bus stopped")
     
     async def _wait_for_empty_queues(self) -> None:
-        """Wait until all priority queues are empty."""
+        """Wait until all priority queues are empty or dispatcher exits."""
         while any(not q.empty() for q in self._queues.values()):
+            if self._dispatcher_task and self._dispatcher_task.done():
+                break
             await asyncio.sleep(0.1)
     
     def subscribe(
@@ -404,6 +449,13 @@ class EventBus:
         
         logger.debug(f"Event emitted: {event.event_type} (priority={event.priority})")
         
+        # Publish to Redis for distributed propagation
+        if self._redis:
+            try:
+                await self._redis.publish("edac:events", event.model_dump_json())
+            except Exception as e:
+                logger.warning(f"Failed to publish event to Redis: {e}")
+        
         return True
     
     async def _dispatcher_loop(self) -> None:
@@ -421,6 +473,33 @@ class EventBus:
             except Exception as e:
                 logger.exception(f"Error dispatching event {event.event_id}: {e}")
     
+    async def _redis_listener_loop(self) -> None:
+        """Listen for events from Redis and re-emit them locally."""
+        if self._redis_pubsub is None:
+            return
+        try:
+            async for message in self._redis_pubsub.listen():
+                if not self._running:
+                    break
+                if message["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(message["data"])
+                    event = Event.model_validate(data)
+                    # Re-emit locally without re-publishing to Redis
+                    async with self._lock:
+                        priority = event.priority
+                        await self._queues[priority].put(event)
+                        self._stats.events_emitted += 1
+                    if self.enable_persistence:
+                        self._event_log.append(event)
+                except Exception as e:
+                    logger.warning(f"Failed to process Redis event: {e}")
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f"Redis listener error: {e}")
+
     async def _get_next_event(self) -> Optional[Event]:
         """Get the next event from priority queues (highest priority first)."""
         for priority in [EventPriority.CRITICAL, EventPriority.HIGH, EventPriority.NORMAL, EventPriority.LOW]:
@@ -434,36 +513,58 @@ class EventBus:
     
     async def _dispatch_event(self, event: Event) -> None:
         """Dispatch an event to all matching subscribers."""
-        # Find matching subscribers
-        matching_subs = self._find_matching_subscribers(event)
-        
-        if not matching_subs:
-            logger.debug(f"No subscribers for event: {event.event_type}")
-            return
-        
-        # Dispatch to all matching subscribers concurrently
-        tasks = []
-        for sub in matching_subs:
-            task = asyncio.create_task(
-                self._invoke_handler(sub, event),
-                name=f"handler_{sub.id}"
-            )
-            tasks.append(task)
-        
-        # Wait for all handlers (with timeout to prevent blocking)
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Log any handler errors
-        for sub, result in zip(matching_subs, results):
-            if isinstance(result, Exception):
-                logger.exception(
-                    f"Handler error for subscription {sub.id}: {result}"
+        # Start trace span if tracer is configured (wraps the entire dispatch)
+        emit_span = None
+        if self.tracer is not None:
+            try:
+                emit_span = self.tracer.start_span(f"event:{event.event_type.value}")
+                emit_span.attributes["event_type"] = event.event_type.value
+                emit_span.attributes["topic"] = event.topic
+                emit_span.attributes["source"] = event.source
+                if event.correlation_id:
+                    emit_span.attributes["correlation_id"] = str(event.correlation_id)
+            except Exception:
+                emit_span = None
+                logger.debug("Tracing failed to start span for event", exc_info=True)
+
+        try:
+            # Find matching subscribers
+            matching_subs = self._find_matching_subscribers(event)
+            
+            if not matching_subs:
+                logger.debug(f"No subscribers for event: {event.event_type}")
+                return
+            
+            # Dispatch to all matching subscribers concurrently
+            tasks = []
+            for sub in matching_subs:
+                task = asyncio.create_task(
+                    self._invoke_handler(sub, event),
+                    name=f"handler_{sub.id}"
                 )
-        
-        self._stats.events_delivered += len(matching_subs)
-        
-        # Also broadcast to stream listeners
-        await self._broadcast_to_streams(event)
+                tasks.append(task)
+            
+            # Wait for all handlers (with timeout to prevent blocking)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Log any handler errors
+            for sub, result in zip(matching_subs, results):
+                if isinstance(result, Exception):
+                    logger.exception(
+                        f"Handler error for subscription {sub.id}: {result}"
+                    )
+            
+            self._stats.events_delivered += len(matching_subs)
+            
+            # Also broadcast to stream listeners
+            await self._broadcast_to_streams(event)
+        finally:
+            # Finish trace span if it was started (dispatch done)
+            if emit_span is not None and self.tracer is not None:
+                try:
+                    self.tracer.end_span(emit_span)
+                except Exception:
+                    logger.debug("Tracing failed to end span for event", exc_info=True)
     
     def _find_matching_subscribers(self, event: Event) -> Set[Subscription]:
         """Find all subscribers that match an event."""
@@ -609,3 +710,9 @@ class EventBus:
             await self.emit(event)
             # Small delay to prevent overwhelming
             await asyncio.sleep(0.001)
+
+    def get_trace_spans(self) -> List[Dict[str, Any]]:
+        """Export trace spans from the attached tracer."""
+        if self.tracer is not None:
+            return self.tracer.export()
+        return []

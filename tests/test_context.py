@@ -134,3 +134,44 @@ class TestContextManager:
         assert mock.last_messages[0].content == "hello"
         assert mock.last_messages[1].role == "user"
         assert mock.last_messages[1].content == "world"
+
+    # ── Compression Integration Tests ──
+
+    def test_compression_triggered_when_window_over_budget(self):
+        """When adding to window causes it to exceed budget, compression runs."""
+        cm = ContextManager(config=ContextConfig(
+            max_tokens_per_agent=1000,
+            compression_trigger_tokens=50,
+        ))
+        # Fill the window with non-system entries to trigger compression
+        for i in range(20):
+            cm.add_to_window("a1", "assistant", f"entry {i}", tokens=10)
+        window = cm.get_window("a1")
+        # After compression, window should be <= max_tokens
+        assert window.total_tokens() <= 100
+        # System summary entry should have been added
+        entries = window.get_window()
+        assert any(e.role == "system" for e in entries)
+
+    def test_compression_skipped_when_under_budget(self):
+        """When window stays under budget, no summarization happens."""
+        cm = ContextManager(config=ContextConfig(max_tokens_per_agent=1000))
+        cm.add_to_window("a1", "user", "hello", tokens=2)
+        cm.add_to_window("a1", "assistant", "hi", tokens=2)
+        window = cm.get_window("a1")
+        entries = window.get_window()
+        assert len(entries) == 2
+        assert not any(e.role == "system" for e in entries)
+
+    def test_system_prompts_preserved_under_compression(self):
+        """System and human entries survive compression."""
+        cm = ContextManager(config=ContextConfig(
+            max_tokens_per_agent=1000,
+            compression_trigger_tokens=50,
+        ))
+        cm.add_to_window("a1", "system", "You are helpful", tokens=5)
+        for i in range(20):
+            cm.add_to_window("a1", "assistant", f"entry {i}", tokens=10)
+        window = cm.get_window("a1")
+        entries = window.get_window()
+        assert any(e.content == "You are helpful" for e in entries)

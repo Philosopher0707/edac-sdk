@@ -14,9 +14,8 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from edac.event.schema import AgentState, Event, EventType, EventPriority, create_event
 
@@ -114,7 +113,7 @@ class AgentInstance:
     def spawn_event(self) -> Event:
         return create_event(
             event_type=EventType.AGENT_SPAWN,
-            source=f"system:lifecycle",
+            source="system:lifecycle",
             topic=f"agent.{self.agent_id}.lifecycle",
             payload={
                 "agent_id": self.agent_id,

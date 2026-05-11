@@ -6,6 +6,7 @@ so external clients can discover and call tools.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List
@@ -36,10 +37,17 @@ class MCPBridge:
         }
         return json.dumps(result)
 
-    def call_tool(self, name: str, arguments: Dict[str, Any]) -> str:
-        """Execute a tool and return JSON-RPC result."""
-        # In a real implementation, this would be async and use the actual registry
-        return json.dumps({
-            "content": [{"type": "text", "text": f"Result from {name}"}],
-            "isError": False,
-        })
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> str:
+        """Execute a tool via the registry and return a JSON-RPC result."""
+        try:
+            result = await self.registry.execute(name, arguments)
+            return json.dumps({
+                "content": [{"type": "text", "text": str(result)}],
+                "isError": False,
+            })
+        except Exception as e:
+            logger.error(f"MCP tool call failed for {name}: {e}")
+            return json.dumps({
+                "content": [{"type": "text", "text": f"Error: {e}"}],
+                "isError": True,
+            })

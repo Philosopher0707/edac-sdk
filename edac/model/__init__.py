@@ -74,7 +74,7 @@ class ModelProvider(ABC):
         ...
 
     @abstractmethod
-    def is_available(self) -> bool:
+    async def is_available(self) -> bool:
         """Check if this provider is configured and reachable."""
         ...
 
@@ -101,13 +101,21 @@ class ModelRegistry:
     def get(self, name: str) -> Optional[ModelProvider]:
         return self._providers.get(name)
 
-    def get_available(self) -> List[str]:
-        return [n for n, p in self._providers.items() if p.is_available()]
+    def list_providers(self) -> List[str]:
+        """Return all registered provider names (without availability check)."""
+        return list(self._providers.keys())
 
-    def get_default(self) -> Optional[ModelProvider]:
+    async def get_available(self) -> List[str]:
+        available = []
+        for n, p in self._providers.items():
+            if await p.is_available():
+                available.append(n)
+        return available
+
+    async def get_default(self) -> Optional[ModelProvider]:
         """Return first available provider, or fallback."""
         for name, provider in self._providers.items():
-            if provider.is_available():
+            if await provider.is_available():
                 return provider
         if self._fallback:
             return self._providers.get(self._fallback)
@@ -128,21 +136,50 @@ class ModelRegistry:
         self,
         provider_name: str,
         messages: List[ChatMessage],
+        fallback: bool = True,
         **kwargs: Any,
     ) -> ChatCompletion:
+        """Chat with a provider, optionally falling back to other available providers."""
         provider = self.get(provider_name)
         if provider is None:
             raise ValueError(f"Unknown provider: {provider_name}")
-        return await provider.chat(messages, **kwargs)
+        last_err: Optional[Exception] = None
+        candidates = [provider]
+        if fallback:
+            for name, p in self._providers.items():
+                if p is not provider and await p.is_available():
+                    candidates.append(p)
+        for prov in candidates:
+            try:
+                return await prov.chat(messages, **kwargs)
+            except Exception as e:
+                last_err = e
+                logger.warning(f"Provider {prov.name} failed: {e}")
+        raise last_err or RuntimeError("All providers failed")
 
     async def stream(
         self,
         provider_name: str,
         messages: List[ChatMessage],
+        fallback: bool = True,
         **kwargs: Any,
     ) -> AsyncIterator[StreamingChunk]:
+        """Stream chat with a provider, optionally falling back to other available providers."""
         provider = self.get(provider_name)
         if provider is None:
             raise ValueError(f"Unknown provider: {provider_name}")
-        async for chunk in provider.stream(messages, **kwargs):
-            yield chunk
+        last_err: Optional[Exception] = None
+        candidates = [provider]
+        if fallback:
+            for name, p in self._providers.items():
+                if p is not provider and await p.is_available():
+                    candidates.append(p)
+        for prov in candidates:
+            try:
+                async for chunk in prov.stream(messages, **kwargs):
+                    yield chunk
+                return
+            except Exception as e:
+                last_err = e
+                logger.warning(f"Provider {prov.name} failed: {e}")
+        raise last_err or RuntimeError("All providers failed")

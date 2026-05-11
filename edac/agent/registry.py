@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from edac.agent.lifecycle import AgentConfig, AgentInstance
+from edac.agent.lifecycle import AgentInstance
 
 logger = logging.getLogger("edac.agent.registry")
 

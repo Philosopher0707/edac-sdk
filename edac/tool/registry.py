@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from edac.event.bus import EventBus
-from edac.event.schema import Event, EventType, EventPriority, create_event
+from edac.event.schema import EventType, EventPriority, create_event
 
 logger = logging.getLogger("edac.tool.registry")
 
@@ -57,6 +57,7 @@ class ToolRegistry:
 
     def __init__(self, bus: Optional[EventBus] = None):
         self.bus = bus
+        self.secrets = None
         self._tools: Dict[str, ToolRecord] = {}
         self._by_category: Dict[str, List[str]] = {}
         self._execution_log: List[Dict[str, Any]] = []
@@ -123,11 +124,19 @@ class ToolRegistry:
 
         await self._emit_tool_event(name, arguments, EventType.TOOL_CALL)
 
+        # Resolve secret placeholders in arguments
+        resolved = self._resolve_secrets(arguments, correlation_id)
+
         try:
-            result = await asyncio.wait_for(
-                record.handler(**arguments),
-                timeout=record.spec.timeout_seconds,
-            )
+            if record.spec.sandbox_required:
+                from edac.security.sandbox import SecureSandbox
+                sandbox = SecureSandbox()
+                result = await sandbox.run(record.handler, resolved)
+            else:
+                result = await asyncio.wait_for(
+                    record.handler(**resolved),
+                    timeout=record.spec.timeout_seconds,
+                )
         except asyncio.TimeoutError:
             error = f"Tool '{name}' timed out after {record.spec.timeout_seconds}s"
             await self._emit_tool_event(name, arguments, EventType.TOOL_TIMEOUT, error=error)
@@ -142,6 +151,25 @@ class ToolRegistry:
 
         await self._emit_tool_event(name, arguments, EventType.TOOL_RESULT, result=result)
         return result
+
+    def _resolve_secrets(
+        self,
+        arguments: Dict[str, Any],
+        correlation_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Replace {{secret.key}} placeholders with values from SecretsManager."""
+        if self.secrets is None:
+            return arguments
+        resolved: Dict[str, Any] = {}
+        for k, v in arguments.items():
+            if isinstance(v, str) and v.startswith("{{secret.") and v.endswith("}}"):
+                key = v[9:-2]  # Extract key from {{secret.KEY}}
+                scope = f"task:{correlation_id}" if correlation_id else None
+                val = self.secrets.get(key, scope=scope) or self.secrets.get(key)
+                resolved[k] = val if val is not None else v
+            else:
+                resolved[k] = v
+        return resolved
 
     def _log_execution(
         self,

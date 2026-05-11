@@ -19,19 +19,21 @@ class TestModelRegistry:
         reg = ModelRegistry()
         assert reg.get("unknown") is None
 
-    def test_get_available(self):
+    @pytest.mark.asyncio
+    async def test_get_available(self):
         reg = ModelRegistry()
         ollama = OllamaProvider()
         reg.register("ollama", ollama)
         # Ollama may or may not be running; just check it doesn't crash
-        available = reg.get_available()
+        available = await reg.get_available()
         assert isinstance(available, list)
 
-    def test_get_default_fallback(self):
+    @pytest.mark.asyncio
+    async def test_get_default_fallback(self):
         reg = ModelRegistry()
         ollama = OllamaProvider()
         reg.register("ollama", ollama, fallback=True)
-        default = reg.get_default()
+        default = await reg.get_default()
         assert default is ollama
 
     @pytest.mark.asyncio
@@ -81,10 +83,11 @@ class TestOllamaProvider:
         p = OllamaProvider()
         assert p.name == "ollama"
 
-    def test_is_available_when_running(self):
+    @pytest.mark.asyncio
+    async def test_is_available_when_running(self):
         p = OllamaProvider()
         # Returns True if ollama is running, False otherwise
-        assert isinstance(p.is_available(), bool)
+        assert isinstance(await p.is_available(), bool)
 
     def test_default_model(self):
         p = OllamaProvider(default_model="qwen2.5-coder")
@@ -109,7 +112,7 @@ class TestOllamaProvider:
     @pytest.mark.asyncio
     async def test_list_models(self):
         p = OllamaProvider()
-        if not p.is_available():
+        if not await p.is_available():
             pytest.skip("Ollama not running")
         models = await p.list_models()
         assert isinstance(models, list)
@@ -143,14 +146,16 @@ class TestAnthropicProvider:
         p = AnthropicProvider(api_key="test")
         assert p.name == "anthropic"
 
-    def test_is_available_with_key(self):
+    @pytest.mark.asyncio
+    async def test_is_available_with_key(self):
         p = AnthropicProvider(api_key="sk-test")
-        assert p.is_available() is True
+        assert await p.is_available() is True
 
-    def test_is_available_without_key(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_is_available_without_key(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         p = AnthropicProvider(api_key="")
-        assert p.is_available() is False
+        assert await p.is_available() is False
 
     def test_convert_messages(self):
         p = AnthropicProvider(api_key="test")
@@ -186,13 +191,15 @@ class TestOpenAIProvider:
         p = OpenAIProvider(api_key="test")
         assert p.name == "openai"
 
-    def test_is_available_with_key(self):
+    @pytest.mark.asyncio
+    async def test_is_available_with_key(self):
         p = OpenAIProvider(api_key="sk-test")
-        assert p.is_available() is True
+        assert await p.is_available() is True
 
-    def test_is_available_without_key(self):
+    @pytest.mark.asyncio
+    async def test_is_available_without_key(self):
         p = OpenAIProvider(api_key="")
-        assert p.is_available() is False
+        assert await p.is_available() is False
 
     def test_convert_messages(self):
         p = OpenAIProvider(api_key="test")
