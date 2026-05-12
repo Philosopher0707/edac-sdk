@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3.2 — 2026-05-12
+
+### Added
+- **Richer exceptions with request IDs** — `EdacClientError` and subclasses now carry `.request_id` from server error responses. Server global exception handler injects `request_id` into all error JSON bodies. Client `_handle_error()` parses from both body and `X-Request-ID` header.
+- **`__str__` / `__repr__` on exceptions** — Exceptions now show `message [req: abc123]` for easy log correlation.
+- **Webhook callbacks** — `SubmitTaskRequest` accepts optional `webhook_url`. When a task reaches terminal status (`completed`/`failed`/`cancelled`), registered webhooks receive a POST with the task result. Retry 3× with backoff on 5xx/network errors.
+- **Webhook CLI** — `edac webhooks register/list/delete` commands.
+- **Webhook REST endpoints** — `POST /tasks/{id}/webhooks`, `GET /tasks/{id}/webhooks`, `DELETE /tasks/{id}/webhooks`.
+- **MkDocs with auto-generated API docs** — `mkdocstrings[python]` generates API reference from Google-style docstrings. New `docs/reference/{client,retry,schemas,cli}.md` pages.
+- **GitHub Pages docs workflow** — `.github/workflows/docs.yml` auto-deploys docs on push to `main`.
+
+### Changed
+- `docs/mkdocs.yml` moved to repo root (`mkdocs.yml`) with `site_url`, `edit_uri`, and `mkdocstrings` plugin configuration.
+
+---
+
 ## v0.3.1 — 2026-05-11
 
 ### Added
