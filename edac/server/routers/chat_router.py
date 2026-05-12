@@ -373,6 +373,27 @@ async def stream_message(
     )
 
 
+# ── WebSocket helpers ───────────────────────────────────────────────────────
+
+
+async def _safe_send_json(websocket, data):
+    """Send JSON safely; returns False if the send failed."""
+    try:
+        await websocket.send_json(data)
+        return True
+    except Exception:
+        return False
+
+
+async def _safe_close(websocket, code=1000, reason=""):
+    """Close WebSocket safely; returns False if already closed."""
+    try:
+        await websocket.close(code=code, reason=reason[:100])
+        return True
+    except Exception:
+        return False
+
+
 # ── WebSocket endpoint ───────────────────────────────────────────────────────
 
 @router.websocket("/sessions/{session_id}/ws")
@@ -415,33 +436,38 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
 
     try:
         while True:
-            raw = await websocket.receive_text()
+            try:
+                raw = await websocket.receive_text()
+            except WebSocketDisconnect:
+                logger.info("WebSocket disconnected for session %s", session_id)
+                return
+
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
-                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+                await _safe_send_json(websocket, {"type": "error", "message": "Invalid JSON"})
                 continue
 
             action = data.get("action", "")
             if action == "send":
-                message = data.get("message", "")
+                message = data.get("message", "")[:2000]  # Truncate to prevent overflow
                 if not message.strip():
-                    await websocket.send_json({"type": "error", "message": "Empty message"})
+                    await _safe_send_json(websocket, {"type": "error", "message": "Empty message"})
                     continue
 
-                # Store user message
-                store.add_message(session_id, "user", message)
-                ctx.add_to_window(session_id, "user", message)
+                # Store user message (trimmed)
+                store.add_message(session_id, "user", message[:500])
+                ctx.add_to_window(session_id, "user", message[:500])
 
                 # Stream response
                 messages: List[ChatMessage] = []
                 for m in store.get_messages(session_id):
                     if m.role in ("system", "user", "assistant"):
-                        messages.append(ChatMessage(role=m.role, content=m.content))
+                        messages.append(ChatMessage(role=m.role, content=m.content[:4000]))
 
-                prov = registry.get(session.provider)
+                prov = registry.get(session.provider or "ollama")
                 if prov is None:
-                    await websocket.send_json({"type": "error",
+                    await _safe_send_json(websocket, {"type": "error",
                                               "message": f"Provider {session.provider} unavailable"})
                     continue
 
@@ -450,43 +476,46 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     async for chunk in prov.stream(messages, model=session.model):
                         if chunk.content:
                             content_parts.append(chunk.content)
-                            await websocket.send_json({"type": "token", "text": chunk.content})
+                            await _safe_send_json(websocket, {"type": "token", "text": chunk.content})
                         if chunk.finish_reason:
                             break
+                except asyncio.CancelledError:
+                    logger.info("Stream cancelled for session %s", session_id)
+                    raise
                 except Exception as e:
                     logger.error("WebSocket stream error for session %s: %s", session_id, e)
-                    await websocket.send_json({"type": "error", "message": str(e)})
+                    await _safe_send_json(websocket, {"type": "error", "message": str(e)[:200]})
                     continue
 
                 full_content = "".join(content_parts)
-                store.add_message(session_id, "assistant", full_content)
-                ctx.add_to_window(session_id, "assistant", full_content)
+                store.add_message(session_id, "assistant", full_content[:4000])
+                ctx.add_to_window(session_id, "assistant", full_content[:4000])
 
-                await websocket.send_json({"type": "done", "content": full_content})
+                await _safe_send_json(websocket, {"type": "done", "content": full_content[:4000]})
 
             elif action == "history":
                 msgs = store.get_messages(session_id)
-                await websocket.send_json({
+                await _safe_send_json(websocket, {
                     "type": "history",
                     "messages": [
-                        {"role": m.role, "content": m.content, "timestamp": m.timestamp.isoformat(),
+                        {"role": m.role, "content": m.content[:500], "timestamp": m.timestamp.isoformat(),
                          "message_id": m.message_id}
-                        for m in msgs
+                        for m in msgs[-20:]  # Last 20 only
                     ],
                 })
 
             elif action == "close":
-                await websocket.close(code=1000, reason="Client closed")
-                break
+                await _safe_close(websocket, code=1000, reason="Client closed")
+                return
 
             else:
-                await websocket.send_json({"type": "error", "message": f"Unknown action: {action}"})
+                await _safe_send_json(websocket, {"type": "error", "message": f"Unknown action: {action}"})
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for session %s", session_id)
+    except asyncio.CancelledError:
+        logger.info("WebSocket task cancelled for session %s", session_id)
+        raise
     except Exception as e:
         logger.error("WebSocket error for session %s: %s", session_id, e)
-        try:
-            await websocket.close(code=1011, reason=str(e)[:100])
-        except Exception:
-            pass
+        await _safe_close(websocket, code=1011, reason=str(e)[:100])
