@@ -144,8 +144,11 @@ async def create_session(
 
     # Also create a context window for this session/agent
     ctx = _get_ctx(request)
+    from edac.server.chat_system_prompt import EDAC_SYSTEM_PROMPT
     if req.system_prompt:
         ctx.add_to_window(session.session_id, "system", req.system_prompt)
+    else:
+        ctx.add_to_window(session.session_id, "system", EDAC_SYSTEM_PROMPT)
 
     logger.info("Created chat session %s (model=%s/%s)",
                 session.session_id, req.provider, req.model)
@@ -397,9 +400,15 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             model=app.state.config.ollama_default_model,
             provider="ollama",
         )
-        # Track session under both its generated ID and the client-requested ID
+        # Track session under the client-requested ID
         store._sessions[session_id] = session
         session.session_id = session_id
+
+    # Inject EDAC system prompt into context if not already present
+    from edac.server.chat_system_prompt import EDAC_SYSTEM_PROMPT
+    if not any(m.role == "system" for m in store.get_messages(session_id)):
+        store.add_message(session_id, "system", EDAC_SYSTEM_PROMPT)
+        ctx.add_to_window(session_id, "system", EDAC_SYSTEM_PROMPT)
 
     await websocket.accept()
     logger.info("WebSocket opened for session %s", session_id)
