@@ -53,6 +53,7 @@ dev = [
     "pre-commit>=3.7",
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.24",
 ]
 all = [
     "anthropic>=0.25",

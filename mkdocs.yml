@@ -1,10 +1,13 @@
 site_name: EDAC Documentation
 site_description: Event-Driven Agentic Core — API reference and developer guide
 site_author: EDAC Team
-docs_dir: .
+site_url: https://edac-team.github.io/edac
+docs_dir: docs
+site_dir: site
 
 repo_name: edac-team/edac
 repo_url: https://github.com/edac-team/edac
+edit_uri: edit/main/docs/
 
 nav:
   - Home: index.md
@@ -12,6 +15,11 @@ nav:
   - Architecture: architecture.md
   - SDK: sdk.md
   - API Reference: api.md
+  - SDK Reference:
+    - Client: reference/client.md
+    - Retry: reference/retry.md
+    - Schemas: reference/schemas.md
+    - CLI: reference/cli.md
   - Observability: observability.md
   - Contributing: contributing.md
 
@@ -48,5 +56,16 @@ markdown_extensions:
 
 plugins:
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature: true
+            show_signature_annotations: true
 
 copyright: Copyright &copy; 2026 EDAC Team. MIT License.

@@ -510,3 +510,16 @@ class TestRequestLogging:
         debug_logs = [r.message for r in caplog.records if r.levelname == "DEBUG"]
         assert any("GET /health" in msg for msg in debug_logs)
         assert any("-> 200" in msg for msg in debug_logs)
+
+
+
+class TestDocsBuild:
+    def test_mkdocs_builds(self):
+        import subprocess
+        result = subprocess.run(
+            ["mkdocs", "build", "--strict"],
+            capture_output=True,
+            text=True,
+        )
+        # mkdocs outputs info to stderr; build succeeds when exit code is 0
+        assert result.returncode == 0, f"mkdocs build failed: {result.stderr}"

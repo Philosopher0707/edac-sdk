@@ -17,3 +17,4 @@ edac.db
 .DS_Store
  benchmarks/
 *.egg-info/
+site/
