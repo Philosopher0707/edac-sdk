@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.1 — 2026-05-11
+
+### Added
+- **`wait_for_task()`** — Poll `get_task()` until terminal status (`completed`, `failed`, `cancelled`) with configurable `poll_interval` and `timeout`. Available on both `EdacClient` and `EdacClientSync`.
+- **`__repr__`** — Both clients now show masked API key and configuration at a glance.
+- **Idempotent `close()`** — `EdacClient.close()` and `EdacClientSync.close()` are now safe to call multiple times.
+
+### Changed
+- `EdacClient.__aenter__` / `__aexit__` cleaned up for proper `async with` usage.
+
+---
+
 ## v0.3.0 — 2026-05-11
 
 ### Added
