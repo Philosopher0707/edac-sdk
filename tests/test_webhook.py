@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from edac.server.webhook import WebhookConfig, WebhookDelivery, WebhookDispatcher, TaskWebhookRegistry
+from edac.server.webhook import WebhookConfig, WebhookDispatcher, TaskWebhookRegistry
 
 
 class TestWebhookRegistry:
