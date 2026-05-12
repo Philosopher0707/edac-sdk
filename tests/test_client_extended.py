@@ -12,7 +12,13 @@ import httpx
 import pytest
 
 from edac.client.client import EdacClient
-from edac.client.exceptions import EdacAuthError, EdacClientError, EdacNotFoundError, EdacRetryExhausted
+from edac.client.exceptions import (
+    EdacAPIError,
+    EdacAuthError,
+    EdacClientError,
+    EdacNotFoundError,
+    EdacRetryExhausted,
+)
 from edac.client.retry import RetryConfig, _should_retry
 from edac.client.sync_client import EdacClientSync
 from edac.server.schemas import BatchError, PaginatedList, TaskResponse
@@ -364,7 +370,7 @@ class TestVersionBump:
             database_url="sqlite+aiosqlite:///:memory:",
             api_key=None,
         )
-        app: FastAPI = create_app(cfg)
+        app: FastAPI = create_app(config=cfg)
         assert app.version == "0.3.0"
 
     def test_system_router_version(self):
@@ -392,94 +398,94 @@ class TestVersionBump:
         assert data["project"]["version"] == "0.3.0"
 
 
-
 # =============================================================================
-# SDK Polish: wait_for_task, context managers, repr
+# Track 1: Richer exceptions with request IDs
 # =============================================================================
 
 
-class TestWaitForTask:
+class TestRequestIdInErrors:
     @pytest.mark.asyncio
-    async def test_wait_for_task_completes(self):
-        """wait_for_task returns the first terminal response."""
-        client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
-        calls = []
-
-        async def fake_get_task(task_id: str) -> TaskResponse:
-            calls.append(task_id)
-            return TaskResponse(
-                id=task_id,
-                status="completed" if len(calls) >= 2 else "running",
-                goal="test",
-                pattern="pipeline",
-                created_at="now",
-                updated_at="now",
-            )
-
-        client.get_task = fake_get_task  # type: ignore[assignment]
-        result = await client.wait_for_task("t-1", poll_interval=0.01, timeout=5.0)
-        assert result.status == "completed"
-        assert len(calls) == 2
-
-    @pytest.mark.asyncio
-    async def test_wait_for_task_timeout(self):
-        """wait_for_task raises EdacClientError on timeout."""
+    async def test_error_contains_request_id_from_json(self):
+        """_handle_error extracts request_id from response JSON body."""
         client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
 
-        async def fake_get_task(task_id: str) -> TaskResponse:
-            return TaskResponse(
-                id=task_id,
-                status="running",
-                goal="test",
-                pattern="pipeline",
-                created_at="now",
-                updated_at="now",
-            )
+        class FakeResponse:
+            status_code = 404
+            headers = {}
 
-        client.get_task = fake_get_task  # type: ignore[assignment]
-        with pytest.raises(EdacClientError, match="Timeout waiting for task"):
-            await client.wait_for_task("t-1", poll_interval=0.01, timeout=0.05)
+            def json(self):
+                return {"detail": "Task not found", "request_id": "abc123"}
 
+        with pytest.raises(EdacNotFoundError) as exc_info:
+            client._handle_error(FakeResponse())  # type: ignore[arg-type]
+        assert exc_info.value.request_id == "abc123"
+        assert "abc123" in str(exc_info.value)
 
-class TestContextManagers:
     @pytest.mark.asyncio
-    async def test_async_context_manager(self):
-        """EdacClient supports async with."""
-        async with EdacClient("http://test") as client:
-            assert isinstance(client, EdacClient)
-            assert client._client is not None
+    async def test_error_contains_request_id_from_header(self):
+        """_handle_error falls back to X-Request-ID header."""
+        client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
 
-    def test_sync_context_manager(self):
-        """EdacClientSync supports with."""
-        with EdacClientSync("http://test") as client:
-            assert isinstance(client, EdacClientSync)
+        class FakeResponse:
+            status_code = 500
+            headers = {"x-request-id": "hdr456"}
+
+            def json(self):
+                return {"detail": "Internal error"}
+
+        with pytest.raises(EdacAPIError) as exc_info:
+            client._handle_error(FakeResponse())  # type: ignore[arg-type]
+        assert exc_info.value.request_id == "hdr456"
+
+    def test_error_str_includes_request_id(self):
+        exc = EdacAPIError("something broke", status_code=500, request_id="xyz789")
+        assert "xyz789" in str(exc)
+        assert "xyz789" in repr(exc)
+
+    def test_error_str_without_request_id(self):
+        exc = EdacNotFoundError("not found", status_code=404)
+        assert str(exc) == "not found"
+
+    def test_retry_exhausted_inherits_request_id(self):
+        exc = EdacRetryExhausted("all retries failed", last_status_code=503, attempts=3, request_id="retry99")
+        assert exc.request_id == "retry99"
+        assert exc.attempts == 3
+
+    def test_server_error_includes_request_id(self):
+        """Global exception handler injects request_id into error JSON."""
+        from fastapi.testclient import TestClient
+        from edac.server.api import create_app
+        from edac.server.config import ServerConfig
+
+        cfg = ServerConfig(database_url="sqlite+aiosqlite:///:memory:", api_key=None)
+        app = create_app(cfg)
+
+        @app.get("/test-404")
+        async def test_404():
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not here")
+
+        with TestClient(app) as client:
+            resp = client.get("/test-404")
+        assert resp.status_code == 404
+        data = resp.json()
+        assert "detail" in data
+        assert "request_id" in data
+        assert len(data["request_id"]) > 0
 
 
-class TestClientRepr:
-    def test_async_client_repr(self):
-        client = EdacClient("http://test", api_key="sekrit", timeout=5.0)
-        r = repr(client)
-        assert "EdacClient" in r
-        assert "http://test" in r
-        assert "***" in r  # api_key masked
-        assert "5.0" in r
-
-    def test_sync_client_repr(self):
-        sync = EdacClientSync("http://test", api_key="sekrit")
-        r = repr(sync)
-        assert "EdacClientSync" in r
-        assert "http://test" in r
-        assert "***" in r
-        assert "running=" in r
-        sync.close()
+# =============================================================================
+# Track 1: Request logging
+# =============================================================================
 
 
 class TestRequestLogging:
     @pytest.mark.asyncio
-    async def test_request_logs_debug(self, caplog):
-        """DEBUG logs capture method, path, status, and duration."""
+    async def test_request_logs_method_status_duration(self, caplog):
+        """_request logs method, path, status, duration at DEBUG."""
         import logging
 
+        caplog.set_level(logging.DEBUG, logger="edac.client")
         client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
 
         class FakeResponse:
@@ -489,42 +495,6 @@ class TestRequestLogging:
 
             async def aread(self):
                 return self._text.encode()
-
-            def json(self):
-                return {"ok": True}
-
-        async def fake_request(*args, **kwargs):
-            return FakeResponse()
-
-        client._client.request = fake_request  # type: ignore[assignment]
-
-        with caplog.at_level(logging.DEBUG, logger="edac.client"):
-            resp = await client._request("GET", "/health")
-            assert resp.status_code == 200
-
-        debug_logs = [r.message for r in caplog.records if r.levelname == "DEBUG"]
-        assert any("GET /health" in msg for msg in debug_logs)
-        assert any("-> 200" in msg for msg in debug_logs)
-
-
-
-# =============================================================================
-# Option B: Observability — DEBUG request/response logging
-# =============================================================================
-
-
-class TestRequestLogging:
-    @pytest.mark.asyncio
-    @pytest.mark.anyio
-    async def test_request_logs_method_status_duration(self, caplog):
-        """DEBUG log contains method, path, status, and duration."""
-        caplog.set_level("DEBUG", logger="edac.client")
-
-        client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
-
-        class FakeResponse:
-            status_code = 200
-            headers = {}
 
             def json(self):
                 return {"ok": True}

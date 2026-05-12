@@ -102,11 +102,13 @@ class EdacClient:
             payload = {"detail": response.text or "Unknown error"}
 
         detail = payload.get("detail", "Unknown error")
+        request_id = payload.get("request_id") or response.headers.get("x-request-id")
+        kwargs = {"status_code": response.status_code, "response": payload, "request_id": request_id}
         if response.status_code == 404:
-            raise EdacNotFoundError(detail, status_code=404, response=payload)
+            raise EdacNotFoundError(detail, **kwargs)
         if response.status_code in (401, 403):
-            raise EdacAuthError(detail, status_code=response.status_code, response=payload)
-        raise EdacAPIError(detail, status_code=response.status_code, response=payload)
+            raise EdacAuthError(detail, **kwargs)
+        raise EdacAPIError(detail, **kwargs)
 
     async def _request(
         self,

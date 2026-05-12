@@ -8,11 +8,31 @@ from typing import Any, Dict, Optional
 class EdacClientError(Exception):
     """Base exception for all EDAC client errors."""
 
-    def __init__(self, message: str, *, status_code: Optional[int] = None, response: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: Optional[int] = None,
+        response: Optional[Dict[str, Any]] = None,
+        request_id: Optional[str] = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.status_code = status_code
         self.response = response
+        self.request_id = request_id
+
+    def __str__(self) -> str:
+        if self.request_id:
+            return f"{self.message} [req: {self.request_id}]"
+        return self.message
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        parts = [f"{cls}({self.status_code}): {self.message}"]
+        if self.request_id:
+            parts.append(f"req={self.request_id!r}")
+        return " ".join(parts)
 
 
 class EdacAPIError(EdacClientError):
@@ -30,8 +50,15 @@ class EdacNotFoundError(EdacClientError):
 class EdacRetryExhausted(EdacClientError):
     """All retry attempts were exhausted."""
 
-    def __init__(self, message: str, *, last_status_code: Optional[int] = None, attempts: int = 0) -> None:
-        super().__init__(message, status_code=last_status_code)
+    def __init__(
+        self,
+        message: str,
+        *,
+        last_status_code: Optional[int] = None,
+        attempts: int = 0,
+        request_id: Optional[str] = None,
+    ) -> None:
+        super().__init__(message, status_code=last_status_code, request_id=request_id)
         self.attempts = attempts
 
 

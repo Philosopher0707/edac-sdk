@@ -278,7 +278,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     # Rate limiting middleware
     @app.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):
-        rate_limiter = app.state.rate_limiter
+        rate_limiter = getattr(app.state, "rate_limiter", None)
+        if rate_limiter is None:
+            return await call_next(request)
         client_id = request.headers.get("x-api-key", request.client.host if request.client else "anonymous")
         if not await rate_limiter.acquire(client_id):
             wait = await rate_limiter.wait_time(client_id)
@@ -310,6 +312,28 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 )
             request.state.user = user
             return await call_next(request)
+
+    # Global exception handlers — enrich every error with request_id
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        payload = {"detail": exc.detail, "request_id": get_request_id() or ""}
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=payload,
+            headers=exc.headers if exc.headers else {},
+        )
+
+    @app.exception_handler(Exception)
+    async def generic_exception_handler(request: Request, exc: Exception):
+        logger.exception("Unhandled exception: %s", exc)
+        rid = get_request_id() or ""
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "An unexpected error occurred. Please try again later.",
+                "request_id": rid,
+            },
+        )
 
     # Mount routers
     app.include_router(tasks_router.router)
