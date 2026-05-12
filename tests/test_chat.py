@@ -178,14 +178,10 @@ class TestChatRouter:
         created = client.post("/chat/sessions", json={"model": "llama3.2"}).json()
         sid = created["session_id"]
 
-        with patch(
-            "edac.server.routers.chat_router._get_registry"
-        ) as mock_get_registry:
+        with patch("edac.server.routers.chat_router._get_registry") as mock_get_registry:
             mock_registry = MagicMock()
             mock_provider = AsyncMock()
-            mock_provider.chat = AsyncMock(
-                return_value=ChatCompletion(content="Hello from mock")
-            )
+            mock_provider.chat = AsyncMock(return_value=ChatCompletion(content="Hello from mock"))
             mock_registry.get.return_value = mock_provider
             mock_get_registry.return_value = mock_registry
 
@@ -198,10 +194,7 @@ class TestChatRouter:
             assert isinstance(data, list)
             assert len(data) >= 2
             assert any(m["role"] == "assistant" for m in data)
-            assert any(
-                "Hello from mock" in m["content"] for m in data
-                if m["role"] == "assistant"
-            )
+            assert any("Hello from mock" in m["content"] for m in data if m["role"] == "assistant")
 
         # Verify history
         resp = client.get(f"/chat/sessions/{sid}")
@@ -341,6 +334,7 @@ class TestSqliteChatStore:
 
         await store2.close()
 
+
 # ── Track B: Tool Calling Tests ──
 
 
@@ -369,16 +363,12 @@ class TestChatToolCalling:
 
             # First LLM call returns a tool-call request, second returns final answer
             tool_call_response = MagicMock()
-            tool_call_response.content = (
-                '{"tool": "edac_health", "arguments": {}}'
-            )
+            tool_call_response.content = '{"tool": "edac_health", "arguments": {}}'
             final_response = MagicMock()
             final_response.content = "The server is healthy!"
 
             mock_prov = AsyncMock()
-            mock_prov.chat = AsyncMock(
-                side_effect=[tool_call_response, final_response]
-            )
+            mock_prov.chat = AsyncMock(side_effect=[tool_call_response, final_response])
 
             with patch.object(app.state.registry, "get", return_value=mock_prov):
                 resp2 = client.post(
@@ -390,9 +380,9 @@ class TestChatToolCalling:
                 # Should include assistant response, tool record, and final answer
                 roles = [m["role"] for m in data]
                 assert "tool" in roles, f"Expected 'tool' role in {roles}"
-                assert (
-                    roles.count("assistant") >= 2
-                ), f"Expected at least 2 assistant messages in {roles}"
+                assert roles.count("assistant") >= 2, (
+                    f"Expected at least 2 assistant messages in {roles}"
+                )
 
     @pytest.mark.asyncio
     async def test_tool_call_unknown_tool_skipped(self):
@@ -415,9 +405,7 @@ class TestChatToolCalling:
 
             # LLM returns a tool call for an unknown tool
             unknown_tool = MagicMock()
-            unknown_tool.content = (
-                '{"tool": "nonexistent_tool", "arguments": {"x": 1}}'
-            )
+            unknown_tool.content = '{"tool": "nonexistent_tool", "arguments": {"x": 1}}'
 
             mock_prov = AsyncMock()
             mock_prov.chat = AsyncMock(return_value=unknown_tool)

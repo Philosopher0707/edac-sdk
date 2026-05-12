@@ -84,9 +84,7 @@ class ChatStore:
             sessions = sessions[:limit]
         return sessions
 
-    def update_session(
-        self, session_id: str, **kwargs
-    ) -> Optional[ChatSession]:
+    def update_session(self, session_id: str, **kwargs) -> Optional[ChatSession]:
         """Update session fields. Returns None if not found."""
         session = self.get_session(session_id)
         if session is None:
@@ -147,9 +145,7 @@ class ChatStore:
         if len(self._sessions) <= self.max_sessions:
             return
         # Sort by updated_at, evict oldest
-        sorted_sessions = sorted(
-            self._sessions.values(), key=lambda s: s.updated_at
-        )
+        sorted_sessions = sorted(self._sessions.values(), key=lambda s: s.updated_at)
         to_evict = len(self._sessions) - self.max_sessions
         for session in sorted_sessions[:to_evict]:
             self._sessions.pop(session.session_id, None)

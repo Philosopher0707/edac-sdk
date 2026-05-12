@@ -8,14 +8,14 @@ from edac.server.config import ServerConfig
 
 
 class TestMCPEndpoints:
-    def test_mcp_list_tools_empty(self):
+    def test_mcp_list_tools(self):
         app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))
         with TestClient(app) as client:
             response = client.get("/mcp/tools")
             assert response.status_code == 200
             data = response.json()
             assert "tools" in data
-            assert data["tools"] == []
+            assert len(data["tools"]) >= 5  # Built-in tools registered at startup
 
     def test_mcp_call_tool_not_found(self):
         app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))

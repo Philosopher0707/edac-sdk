@@ -18,7 +18,15 @@ import re
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -27,7 +35,12 @@ from edac.event.schema import Event, EventType, create_event, EventPriority
 from edac.context.manager import ContextManager
 from edac.model import ModelRegistry, ChatMessage
 from edac.server.audit import log_audit
-from edac.server.auth import ACTION_CHAT_CREATE, ACTION_CHAT_DELETE, ACTION_CHAT_GET, ACTION_CHAT_SEND
+from edac.server.auth import (
+    ACTION_CHAT_CREATE,
+    ACTION_CHAT_DELETE,
+    ACTION_CHAT_GET,
+    ACTION_CHAT_SEND,
+)
 
 logger = logging.getLogger("edac.server.routers.chat")
 
@@ -36,8 +49,10 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 # ── Pydantic schemas ─────────────────────────────────────────────────────────
 
+
 class CreateSessionRequest(BaseModel):
     """Request body for creating a chat session."""
+
     model: str = Field(default="llama3.2", description="Model to use")
     provider: str = Field(default="ollama", description="Model provider")
     system_prompt: Optional[str] = Field(default=None, description="System prompt")
@@ -46,12 +61,14 @@ class CreateSessionRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     """Request body for sending a chat message."""
+
     message: str = Field(..., description="User message text")
     stream: bool = Field(default=False, description="Whether to stream the response")
 
 
 class ChatMessageResponse(BaseModel):
     """A single message in the response."""
+
     role: str
     content: str
     timestamp: str
@@ -60,6 +77,7 @@ class ChatMessageResponse(BaseModel):
 
 class ChatSessionResponse(BaseModel):
     """Chat session metadata."""
+
     session_id: str
     title: Optional[str]
     model: str
@@ -71,12 +89,14 @@ class ChatSessionResponse(BaseModel):
 
 class ChatHistoryResponse(BaseModel):
     """Full session history."""
+
     session_id: str
     title: Optional[str]
     messages: List[ChatMessageResponse]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _get_store(request: Request) -> ChatStore:
     """Get ChatStore from app state (created in lifespan)."""
@@ -127,6 +147,7 @@ def _check_auth(request: Request, action: str) -> None:
 
 # ── REST endpoints ─────────────────────────────────────────────────────────────
 
+
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
 async def create_session(
     req: CreateSessionRequest,
@@ -146,13 +167,15 @@ async def create_session(
     # Also create a context window for this session/agent
     ctx = _get_ctx(request)
     from edac.server.chat_system_prompt import EDAC_SYSTEM_PROMPT
+
     if req.system_prompt:
         ctx.add_to_window(session.session_id, "system", req.system_prompt)
     else:
         ctx.add_to_window(session.session_id, "system", EDAC_SYSTEM_PROMPT)
 
-    logger.info("Created chat session %s (model=%s/%s)",
-                session.session_id, req.provider, req.model)
+    logger.info(
+        "Created chat session %s (model=%s/%s)", session.session_id, req.provider, req.model
+    )
 
     return ChatSessionResponse(
         session_id=session.session_id,
@@ -199,8 +222,9 @@ async def get_session(
 
     session = store.get_session(session_id)
     if session is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                          detail=f"Session {session_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Session {session_id} not found"
+        )
 
     messages = store.get_messages(session_id)
     return ChatHistoryResponse(
@@ -228,8 +252,9 @@ async def delete_session(
     store = _get_store(request)
 
     if not store.delete_session(session_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                          detail=f"Session {session_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Session {session_id} not found"
+        )
 
     # Also clear context window
     ctx = _get_ctx(request)
@@ -252,12 +277,14 @@ async def send_message(
 
     session = store.get_session(session_id)
     if session is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                          detail=f"Session {session_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Session {session_id} not found"
+        )
 
     if not req.message.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                          detail="Message cannot be empty")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Message cannot be empty"
+        )
 
     # Store user message
     store.add_message(session_id, "user", req.message)
@@ -306,7 +333,13 @@ async def send_message(
         try:
             tool_data = json.loads(json_match.group())
             tool_name = tool_data.get("tool") or tool_data.get("function") or tool_data.get("name")
-            tool_args = tool_data.get("arguments") or tool_data.get("args") or tool_data.get("parameters") or tool_data.get("input") or {}
+            tool_args = (
+                tool_data.get("arguments")
+                or tool_data.get("args")
+                or tool_data.get("parameters")
+                or tool_data.get("input")
+                or {}
+            )
             if isinstance(tool_args, str):
                 try:
                     tool_args = json.loads(tool_args)
@@ -366,12 +399,14 @@ async def stream_message(
 
     session = store.get_session(session_id)
     if session is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                          detail=f"Session {session_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Session {session_id} not found"
+        )
 
     if not req.message.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                          detail="Message cannot be empty")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Message cannot be empty"
+        )
 
     # Store user message
     store.add_message(session_id, "user", req.message)
@@ -442,6 +477,7 @@ async def _safe_close(websocket, code=1000, reason=""):
 
 # ── WebSocket endpoint ───────────────────────────────────────────────────────
 
+
 @router.websocket("/sessions/{session_id}/ws")
 async def chat_websocket(websocket: WebSocket, session_id: str):
     """Bidirectional WebSocket for real-time chat.
@@ -473,6 +509,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
 
     # Inject EDAC system prompt into context if not already present
     from edac.server.chat_system_prompt import EDAC_SYSTEM_PROMPT
+
     if not any(m.role == "system" for m in store.get_messages(session_id)):
         store.add_message(session_id, "system", EDAC_SYSTEM_PROMPT)
         ctx.add_to_window(session_id, "system", EDAC_SYSTEM_PROMPT)
@@ -513,8 +550,10 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
 
                 prov = registry.get(session.provider or "ollama")
                 if prov is None:
-                    await _safe_send_json(websocket, {"type": "error",
-                                              "message": f"Provider {session.provider} unavailable"})
+                    await _safe_send_json(
+                        websocket,
+                        {"type": "error", "message": f"Provider {session.provider} unavailable"},
+                    )
                     continue
 
                 content_parts: List[str] = []
@@ -522,7 +561,9 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     async for chunk in prov.stream(messages, model=session.model):
                         if chunk.content:
                             content_parts.append(chunk.content)
-                            await _safe_send_json(websocket, {"type": "token", "text": chunk.content})
+                            await _safe_send_json(
+                                websocket, {"type": "token", "text": chunk.content}
+                            )
                         if chunk.finish_reason:
                             break
                 except asyncio.CancelledError:
@@ -548,8 +589,18 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         break
                     try:
                         tool_data = json.loads(json_match.group())
-                        tool_name = tool_data.get("tool") or tool_data.get("function") or tool_data.get("name")
-                        tool_args = tool_data.get("arguments") or tool_data.get("args") or tool_data.get("parameters") or tool_data.get("input") or {}
+                        tool_name = (
+                            tool_data.get("tool")
+                            or tool_data.get("function")
+                            or tool_data.get("name")
+                        )
+                        tool_args = (
+                            tool_data.get("arguments")
+                            or tool_data.get("args")
+                            or tool_data.get("parameters")
+                            or tool_data.get("input")
+                            or {}
+                        )
                         if isinstance(tool_args, str):
                             try:
                                 tool_args = json.loads(tool_args)
@@ -568,7 +619,10 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     except Exception as te:
                         tool_output = f"Tool error: {te}"
 
-                    await _safe_send_json(websocket, {"type": "tool_call", "tool": tool_name, "result": tool_output[:500]})
+                    await _safe_send_json(
+                        websocket,
+                        {"type": "tool_call", "tool": tool_name, "result": tool_output[:500]},
+                    )
 
                     # Feed tool result back into context
                     store.add_message(session_id, "tool", f"Tool {tool_name}: {tool_output}")
@@ -585,7 +639,9 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         async for chunk in prov.stream(messages, model=session.model):
                             if chunk.content:
                                 content_parts.append(chunk.content)
-                                await _safe_send_json(websocket, {"type": "token", "text": chunk.content})
+                                await _safe_send_json(
+                                    websocket, {"type": "token", "text": chunk.content}
+                                )
                             if chunk.finish_reason:
                                 break
                     except asyncio.CancelledError:
@@ -599,26 +655,36 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     full_content = "".join(content_parts)
                     store.add_message(session_id, "assistant", full_content[:4000])
                     ctx.add_to_window(session_id, "assistant", full_content[:4000])
-                    await _safe_send_json(websocket, {"type": "done", "content": full_content[:4000]})
-
+                    await _safe_send_json(
+                        websocket, {"type": "done", "content": full_content[:4000]}
+                    )
 
             elif action == "history":
                 msgs = store.get_messages(session_id)
-                await _safe_send_json(websocket, {
-                    "type": "history",
-                    "messages": [
-                        {"role": m.role, "content": m.content[:500], "timestamp": m.timestamp.isoformat(),
-                         "message_id": m.message_id}
-                        for m in msgs[-20:]  # Last 20 only
-                    ],
-                })
+                await _safe_send_json(
+                    websocket,
+                    {
+                        "type": "history",
+                        "messages": [
+                            {
+                                "role": m.role,
+                                "content": m.content[:500],
+                                "timestamp": m.timestamp.isoformat(),
+                                "message_id": m.message_id,
+                            }
+                            for m in msgs[-20:]  # Last 20 only
+                        ],
+                    },
+                )
 
             elif action == "close":
                 await _safe_close(websocket, code=1000, reason="Client closed")
                 return
 
             else:
-                await _safe_send_json(websocket, {"type": "error", "message": f"Unknown action: {action}"})
+                await _safe_send_json(
+                    websocket, {"type": "error", "message": f"Unknown action: {action}"}
+                )
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for session %s", session_id)

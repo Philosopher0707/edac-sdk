@@ -133,12 +133,8 @@ class SqliteChatStore(ChatStore):
 
     async def _delete_from_db(self, session_id: str) -> None:
         if self._db:
-            await self._db.execute(
-                "DELETE FROM chat_messages WHERE session_id = ?", (session_id,)
-            )
-            await self._db.execute(
-                "DELETE FROM chat_sessions WHERE session_id = ?", (session_id,)
-            )
+            await self._db.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+            await self._db.execute("DELETE FROM chat_sessions WHERE session_id = ?", (session_id,))
             await self._db.commit()
 
     # ── Messages ──
@@ -171,9 +167,7 @@ class SqliteChatStore(ChatStore):
             )
             await self._db.commit()
 
-    def get_messages(
-        self, session_id: str, offset: int = 0, limit: int = 0
-    ) -> List[ChatMessage]:
+    def get_messages(self, session_id: str, offset: int = 0, limit: int = 0) -> List[ChatMessage]:
         session = self.get_session(session_id)
         if session is None:
             return []
