@@ -28,7 +28,7 @@ from edac.cli.commands.webhooks import webhooks
 from edac.server.api import create_app
 from edac.server.config import ServerConfig
 
-EDAC_VERSION = "0.4.0"
+EDAC_VERSION = "0.5.0"
 
 logger = logging.getLogger("edac.cli")
 
@@ -294,7 +294,7 @@ def approve_gate(trigger: str, approver: str, server: str) -> None:
 @cli.command()
 def version() -> None:
     """Show EDAC version."""
-    click.echo("EDAC 0.4.0")
+    click.echo("EDAC 0.5.0")
 
 
 def main() -> None:

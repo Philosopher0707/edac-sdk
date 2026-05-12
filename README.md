@@ -6,8 +6,8 @@
 
 <p align="center">
   <a href="https://github.com/Philosopher0707/edac-sdk/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="https://pypi.org/project/edac/"><img src="https://img.shields.io/badge/pypi-v0.4.0-blue" alt="PyPI: 0.4.0" /></a>
-  <img src="https://img.shields.io/badge/tests-514%20passed-green" alt="Tests: 514 passed" />
+  <a href="https://pypi.org/project/edac/"><img src="https://img.shields.io/badge/pypi-v0.5.0-blue" alt="PyPI: 0.5.0" /></a>
+  <img src="https://img.shields.io/badge/tests-528%20passed-green" alt="Tests: 528 passed" />
   <img src="https://img.shields.io/badge/python-3.11%2B-purple" alt="Python: 3.11+" />
   <img src="https://img.shields.io/badge/fastapi-0.110%2B-orange" alt="FastAPI: 0.110+" />
 </p>
@@ -36,8 +36,10 @@ Unlike frameworks that only orchestrate LLM calls, EDAC treats **events as first
 | **Retry / Exponential Backoff** | ✅ Ready | `RetryConfig` with automatic retry on 429, 500, 502, 503, 504 |
 | **Pagination** | ✅ Ready | `PaginatedList[T]` with header-based metadata |
 | **Batch Operations** | ✅ Ready | Submit/create/delete many items in one round-trip |
-| **Webhooks** | ✅ v0.4.0 | Fire-and-forget callbacks when tasks complete |
-| **Error Correlation** | ✅ v0.4.0 | Every exception carries `request_id` from server logs |
+| **Webhooks** | ✅ v0.5.0 | Fire-and-forget callbacks when tasks complete |
+| **Tool Calling in Chat** | ✅ v0.5.0 | Chat agent executes real tools (health, submit, list) via ReAct loop |
+| **Persistent Chat Memory** | ✅ v0.5.0 | SQLite-backed sessions survive server restarts |
+| **Error Correlation** | ✅ v0.5.0 | Every exception carries `request_id` from server logs |
 | **Rate Limiting** | ✅ Ready | Token-bucket per API key or IP |
 | **HITL Approvals** | ✅ Ready | Pause task execution pending human approval |
 | **Auth (RBAC)** | ✅ Ready | Admin / Operator / Viewer roles |
@@ -157,17 +159,25 @@ async for update in client.watch_task("task-123", timeout=30):
     print(f"Status: {update.status}")
 ```
 
-### 6. Watch from CLI
+### 7. Chat with an EDAC-Aware Agent
 
 ```bash
-# Submit and watch via WebSocket
-edac run --watch --goal "Research quantum computing"
+edac chat
+```
 
-# Follow all SSE events in real time
-edac events follow --topics agent.results --count 50
+The chat agent knows the full EDAC architecture, SDK APIs, and CLI commands. It can execute tools:
 
-# Watch a specific task
-edac events watch task-abc123
+```
+You: check server health
+Agent: {"tool": "edac_health"}
+  [tool_call] edac_health: {"status": "healthy", "version": "0.5.0"}
+  The EDAC server is healthy and running v0.5.0.
+```
+
+Resume past conversations (persistent SQLite memory):
+
+```bash
+edac chat --session-id abc123
 ```
 
 ---

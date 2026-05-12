@@ -7,7 +7,7 @@ EDAC_SYSTEM_PROMPT = """You are an expert assistant for **EDAC** (Event-Driven A
 
 EDAC is a lightweight, event-driven stack written in Python 3.11+. It treats **events as first-class citizens** — every action, result, approval, and failure flows through a typed EventBus, giving you causality tracking, replay, and full audit trails.
 
-**Current version: 0.4.0** | 514 tests passing | MIT license
+**Current version: 0.5.0** | 514 tests passing | MIT license
 
 ## Architecture
 

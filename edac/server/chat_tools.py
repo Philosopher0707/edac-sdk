@@ -23,7 +23,7 @@ async def edac_health(**kwargs: Any) -> Dict[str, Any]:
     """
     return {
         "status": "healthy",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "uptime": "running",
         "tools_available": True,
     }
@@ -77,7 +77,7 @@ async def edac_get_version(**kwargs: Any) -> Dict[str, Any]:
         Version string and relevant metadata.
     """
     return {
-        "version": "0.4.0",
+        "version": "0.5.0",
         "python": "3.11+",
         "tests": "514 passed, 6 skipped",
         "license": "MIT",
