@@ -37,7 +37,7 @@ async def example_coder(instance: AgentInstance) -> None:
                 instance.config.name, instance.config.goal)
 
     # Keep running until terminated (real agent would do work here)
-    while instance.state.state not in ("terminated", "error"):
+    while instance.state not in ("terminated", "error"):
         await asyncio.sleep(1)
 
     logger.info("Example Coder agent terminated")
