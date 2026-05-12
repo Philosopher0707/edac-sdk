@@ -16,8 +16,9 @@ from edac.server.auth import (
     ACTION_LIST_TASKS,
     ACTION_SUBMIT_TASK,
 )
-from edac.server.schemas import SubmitTaskRequest, TaskResponse
+from edac.server.schemas import SubmitTaskRequest, TaskResponse, WebhookConfig, WebhookDelivery
 from edac.server.store import TaskStore
+from edac.server.webhook import TaskWebhookRegistry, WebhookDispatcher
 from edac.server.worker import QueuedTask, TaskWorker
 
 logger = logging.getLogger("edac.server.routers.tasks")
@@ -216,6 +217,33 @@ async def get_task_events(task_id: str, request: Request) -> List[Dict[str, Any]
     return events
 
 
+@router.post("/tasks/{task_id}/webhooks")
+async def register_task_webhook(
+    task_id: str, config: WebhookConfig, request: Request
+) -> Dict[str, str]:
+    """Register a webhook to be called when the task reaches a terminal status."""
+    registry: TaskWebhookRegistry = request.app.state.webhook_registry
+    registry.register(task_id, config)
+    return {"status": "registered", "task_id": task_id, "url": config.url}
+
+
+@router.get("/tasks/{task_id}/webhooks")
+async def list_task_webhooks(task_id: str, request: Request) -> List[WebhookConfig]:
+    """List webhooks registered for a task."""
+    registry: TaskWebhookRegistry = request.app.state.webhook_registry
+    return registry.get(task_id)
+
+
+@router.delete("/tasks/{task_id}/webhooks")
+async def delete_task_webhooks(
+    task_id: str, request: Request, url: Optional[str] = None
+) -> Dict[str, Any]:
+    """Remove webhooks for a task. If *url* is provided, only remove matching ones."""
+    registry: TaskWebhookRegistry = request.app.state.webhook_registry
+    removed = registry.remove(task_id, url)
+    return {"removed": removed, "task_id": task_id}
+
+
 @router.websocket("/tasks/{task_id}/ws")
 async def task_websocket(websocket: WebSocket, task_id: str):
     """WebSocket for real-time task updates.
@@ -246,6 +274,23 @@ async def task_websocket(websocket: WebSocket, task_id: str):
                         "error": task.error,
                         "updated_at": task.updated_at,
                     })
+                    # Fire webhooks on terminal status transitions
+                    terminal = {"completed", "failed", "cancelled"}
+                    if task.status in terminal:
+                        registry: TaskWebhookRegistry = getattr(app.state, "webhook_registry", None)
+                        dispatcher: WebhookDispatcher = getattr(app.state, "webhook_dispatcher", None)
+                        if registry and dispatcher:
+                            configs = registry.get(task_id)
+                            if configs:
+                                payload = {
+                                    "status": task.status,
+                                    "result": task.result,
+                                    "error": task.error,
+                                }
+                                for cfg in configs:
+                                    asyncio.create_task(
+                                        dispatcher.deliver(cfg, task_id, payload)
+                                    )
 
                 events = await store.get_events(task_id)
                 new_events = [e for e in events if e.get("id", 0) > last_event_id]

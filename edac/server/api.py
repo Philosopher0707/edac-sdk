@@ -172,6 +172,11 @@ async def lifespan(app: FastAPI):
         default_refill=cfg.rate_limit_refill,
     )
 
+    # Webhook infrastructure
+    from edac.server.webhook import TaskWebhookRegistry, WebhookDispatcher
+    webhook_registry = TaskWebhookRegistry()
+    webhook_dispatcher = WebhookDispatcher()
+
     # RuntimeContext — central DI container
     app.state.ctx_runtime = RuntimeContext(
         bus=bus,
@@ -217,6 +222,8 @@ async def lifespan(app: FastAPI):
     app.state.tracer = tracer
     app.state.approval_manager = approval_manager
     app.state.websockets: Dict[str, List[Any]] = {}
+    app.state.webhook_registry = webhook_registry
+    app.state.webhook_dispatcher = webhook_dispatcher
 
     logger.info("EDAC server started")
     yield
@@ -232,6 +239,7 @@ async def lifespan(app: FastAPI):
         await anthropic.close()
     if openai:
         await openai.close()
+    await webhook_dispatcher.close()
     logger.info("EDAC server stopped")
 
 

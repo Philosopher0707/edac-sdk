@@ -16,6 +16,26 @@ class SubmitTaskRequest(BaseModel):
     pattern: str = Field(default="pipeline", pattern="^(pipeline|mesh|orchestrator-workers)$")
     agents: List[Dict[str, Any]] = Field(default_factory=list)
     max_parallel: int = Field(default=3, ge=1, le=20)
+    webhook_url: Optional[str] = Field(default=None, description="URL to POST task result when completed/failed")
+
+
+class WebhookConfig(BaseModel):
+    """Configuration for a webhook endpoint."""
+
+    url: str
+    events: List[str] = Field(default_factory=lambda: ["task.completed", "task.failed"])
+
+
+class WebhookDelivery(BaseModel):
+    """Record of a webhook delivery attempt."""
+
+    url: str
+    task_id: str
+    status: str
+    attempt: int
+    response_status: Optional[int] = None
+    delivered_at: Optional[float] = None
+    error: Optional[str] = None
 
 
 class TaskResponse(BaseModel):
