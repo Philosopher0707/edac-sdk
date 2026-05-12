@@ -119,16 +119,23 @@ class EdacClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """Execute an HTTP request with automatic retry/backoff."""
+        t0 = time.monotonic()
         last_exc: Optional[BaseException] = None
         for attempt in range(self._retry.max_retries + 1):
             try:
                 if stream:
-                    return await self._client.request(
+                    response = await self._client.request(
                         method, path, params=params, json=json, **kwargs
                     )
-                return await self._client.request(
-                    method, path, params=params, json=json, **kwargs
+                else:
+                    response = await self._client.request(
+                        method, path, params=params, json=json, **kwargs
+                    )
+                logger.debug(
+                    '%s %s -> %d (%.1f ms)',
+                    method, path, response.status_code, (time.monotonic() - t0) * 1000
                 )
+                return response
             except BaseException as exc:
                 last_exc = exc
                 if attempt == self._retry.max_retries or not _should_retry(exc, self._retry):

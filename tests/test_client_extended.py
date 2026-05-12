@@ -390,3 +390,153 @@ class TestVersionBump:
         with open("pyproject.toml", "rb") as f:
             data = tomllib.load(f)
         assert data["project"]["version"] == "0.3.0"
+
+
+
+# =============================================================================
+# SDK Polish: wait_for_task, context managers, repr
+# =============================================================================
+
+
+class TestWaitForTask:
+    @pytest.mark.asyncio
+    async def test_wait_for_task_completes(self):
+        """wait_for_task returns the first terminal response."""
+        client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
+        calls = []
+
+        async def fake_get_task(task_id: str) -> TaskResponse:
+            calls.append(task_id)
+            return TaskResponse(
+                id=task_id,
+                status="completed" if len(calls) >= 2 else "running",
+                goal="test",
+                pattern="pipeline",
+                created_at="now",
+                updated_at="now",
+            )
+
+        client.get_task = fake_get_task  # type: ignore[assignment]
+        result = await client.wait_for_task("t-1", poll_interval=0.01, timeout=5.0)
+        assert result.status == "completed"
+        assert len(calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_wait_for_task_timeout(self):
+        """wait_for_task raises EdacClientError on timeout."""
+        client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
+
+        async def fake_get_task(task_id: str) -> TaskResponse:
+            return TaskResponse(
+                id=task_id,
+                status="running",
+                goal="test",
+                pattern="pipeline",
+                created_at="now",
+                updated_at="now",
+            )
+
+        client.get_task = fake_get_task  # type: ignore[assignment]
+        with pytest.raises(EdacClientError, match="Timeout waiting for task"):
+            await client.wait_for_task("t-1", poll_interval=0.01, timeout=0.05)
+
+
+class TestContextManagers:
+    @pytest.mark.asyncio
+    async def test_async_context_manager(self):
+        """EdacClient supports async with."""
+        async with EdacClient("http://test") as client:
+            assert isinstance(client, EdacClient)
+            assert client._client is not None
+
+    def test_sync_context_manager(self):
+        """EdacClientSync supports with."""
+        with EdacClientSync("http://test") as client:
+            assert isinstance(client, EdacClientSync)
+
+
+class TestClientRepr:
+    def test_async_client_repr(self):
+        client = EdacClient("http://test", api_key="sekrit", timeout=5.0)
+        r = repr(client)
+        assert "EdacClient" in r
+        assert "http://test" in r
+        assert "***" in r  # api_key masked
+        assert "5.0" in r
+
+    def test_sync_client_repr(self):
+        sync = EdacClientSync("http://test", api_key="sekrit")
+        r = repr(sync)
+        assert "EdacClientSync" in r
+        assert "http://test" in r
+        assert "***" in r
+        assert "running=" in r
+        sync.close()
+
+
+class TestRequestLogging:
+    @pytest.mark.asyncio
+    async def test_request_logs_debug(self, caplog):
+        """DEBUG logs capture method, path, status, and duration."""
+        import logging
+
+        client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
+
+        class FakeResponse:
+            status_code = 200
+            headers = {}
+            _text = '{"ok": true}'
+
+            async def aread(self):
+                return self._text.encode()
+
+            def json(self):
+                return {"ok": True}
+
+        async def fake_request(*args, **kwargs):
+            return FakeResponse()
+
+        client._client.request = fake_request  # type: ignore[assignment]
+
+        with caplog.at_level(logging.DEBUG, logger="edac.client"):
+            resp = await client._request("GET", "/health")
+            assert resp.status_code == 200
+
+        debug_logs = [r.message for r in caplog.records if r.levelname == "DEBUG"]
+        assert any("GET /health" in msg for msg in debug_logs)
+        assert any("-> 200" in msg for msg in debug_logs)
+
+
+
+# =============================================================================
+# Option B: Observability — DEBUG request/response logging
+# =============================================================================
+
+
+class TestRequestLogging:
+    @pytest.mark.asyncio
+    @pytest.mark.anyio
+    async def test_request_logs_method_status_duration(self, caplog):
+        """DEBUG log contains method, path, status, and duration."""
+        caplog.set_level("DEBUG", logger="edac.client")
+
+        client = EdacClient("http://test", retry=RetryConfig(max_retries=0))
+
+        class FakeResponse:
+            status_code = 200
+            headers = {}
+
+            def json(self):
+                return {"ok": True}
+
+        async def fake_request(*args, **kwargs):
+            return FakeResponse()
+
+        client._client.request = fake_request  # type: ignore[assignment]
+
+        resp = await client._request("GET", "/health")
+        assert resp.status_code == 200
+
+        debug_logs = [r.message for r in caplog.records if r.levelname == "DEBUG"]
+        assert any("GET /health" in msg for msg in debug_logs)
+        assert any("-> 200" in msg for msg in debug_logs)
