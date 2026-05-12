@@ -57,6 +57,10 @@ ACTION_PAUSE_AGENT = "pause_agent"
 ACTION_RESUME_AGENT = "resume_agent"
 ACTION_GET_METRICS = "get_metrics"
 ACTION_GET_HEALTH = "get_health"
+ACTION_CHAT_CREATE = "chat_create"
+ACTION_CHAT_GET = "chat_get"
+ACTION_CHAT_DELETE = "chat_delete"
+ACTION_CHAT_SEND = "chat_send"
 
 _PERMISSIONS: Dict[Role, Set[str]] = {
     Role.ADMIN: {
