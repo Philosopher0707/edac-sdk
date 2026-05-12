@@ -182,7 +182,6 @@ async def _server_loop(
     if api_key:
         headers["x-api-key"] = api_key
 
-    # Create or resume a session via REST, then connect via WebSocket
     sid = session_id or str(uuid.uuid4())
     ws_url = server.replace("http", "ws").rstrip("/") + "/chat/sessions/" + sid + "/ws"
 
@@ -191,24 +190,8 @@ async def _server_loop(
 
     try:
         async with websockets.connect(ws_url, additional_headers=headers) as ws:
-            # Server auto-accepts — no join needed
-
-            async def receive_task():
-                while True:
-                    raw = await ws.recv()
-                    msg = json.loads(raw)
-                    msg_type = msg.get("type")
-                    if msg_type == "token":
-                        click.echo(msg.get("text", ""), nl=False)
-                    elif msg_type == "done":
-                        click.echo("")
-                        click.echo(f"{DIM}[turn complete]{RESET}")
-                    elif msg_type == "error":
-                        click.echo(f"\n{YELLOW}Error: {msg.get('message')}{RESET}", err=True)
-
-            recv_task = asyncio.create_task(receive_task())
-
             while True:
+                # Prompt for input (no background receive during prompt)
                 try:
                     text = click.prompt(f"{BOLD}{GREEN}You{RESET}", type=str).strip()
                 except click.exceptions.Abort:
@@ -220,38 +203,44 @@ async def _server_loop(
                 if text.startswith("/"):
                     if text in ("/quit", "/exit"):
                         break
-                    if text == "/clear":
-                        # Reset session via DELETE + recreate would be ideal, but for now
-                        # just acknowledge — server will reset via new session on next connect
-                        click.echo(f"  {DIM}Cleared conversation.{RESET}")
-                        continue
                     if text == "/history":
-                        # Fetch history via REST
-                        resp = httpx.get(
-                            f"{server}/chat/sessions/{sid}",
-                            headers=headers,
-                            timeout=10.0,
-                        )
-                        resp.raise_for_status()
-                        msgs = resp.json().get("messages", [])
-                        click.echo(f"\n{DIM}--- History ---{RESET}")
-                        for m in msgs:
-                            role_color = GREEN if m["role"] == "user" else CYAN
-                            click.echo(f"{role_color}{m['role']}{RESET}: {m['content']}")
-                        click.echo(f"{DIM}---------------{RESET}\n")
+                        try:
+                            resp = httpx.get(
+                                f"{server}/chat/sessions/{sid}",
+                                headers=headers,
+                                timeout=10.0,
+                            )
+                            resp.raise_for_status()
+                            msgs = resp.json().get("messages", [])
+                            click.echo(f"\n{DIM}--- History ---{RESET}")
+                            for m in msgs:
+                                role_color = GREEN if m["role"] == "user" else CYAN
+                                click.echo(f"{role_color}{m['role']}{RESET}: {m['content']}")
+                            click.echo(f"{DIM}---------------{RESET}\n")
+                        except Exception as e:
+                            click.echo(f"{YELLOW}Failed: {e}{RESET}")
+                        continue
+                    if text == "/clear":
+                        click.echo(f"  {DIM}Start a fresh session with --session-id.{RESET}")
                         continue
 
+                # Send message, then drain all responses before next prompt
                 click.echo(f"{BOLD}{MAGENTA}Agent{RESET}: ", nl=False)
-                await ws.send(json.dumps({
-                    "action": "send",
-                    "message": text,
-                }))
+                await ws.send(json.dumps({"action": "send", "message": text}))
 
-            recv_task.cancel()
-            try:
-                await recv_task
-            except asyncio.CancelledError:
-                pass
+                # Drain responses synchronously — no concurrent task
+                while True:
+                    raw = await ws.recv()
+                    msg = json.loads(raw)
+                    msg_type = msg.get("type")
+                    if msg_type == "token":
+                        click.echo(msg.get("text", ""), nl=False)
+                    elif msg_type == "done":
+                        click.echo("")
+                        break
+                    elif msg_type == "error":
+                        click.echo(f"\n{YELLOW}Error: {msg.get('message')}{RESET}")
+                        break
 
     except websockets.exceptions.InvalidStatusCode as e:
         click.echo(f"\n{YELLOW}Connection failed ({e.status_code}):{RESET}", err=True)
