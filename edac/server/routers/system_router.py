@@ -59,7 +59,7 @@ async def health(request: Request) -> HealthResponse:
     log_audit(ACTION_GET_HEALTH, "/health", "success")
     return HealthResponse(
         status=overall,
-        version="0.3.2",
+        version="0.4.0",
         components=components,
     )
 

@@ -268,7 +268,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     app = FastAPI(
         title="EDAC",
         description="Event-Driven Agentic Core — Production API",
-        version="0.3.2",
+        version="0.4.0",
         lifespan=lifespan,
     )
     app.state.config = cfg

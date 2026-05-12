@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/Philosopher0707/edac-sdk/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="https://pypi.org/project/edac/"><img src="https://img.shields.io/badge/pypi-v0.3.2-blue" alt="PyPI: 0.3.2" /></a>
+  <a href="https://pypi.org/project/edac/"><img src="https://img.shields.io/badge/pypi-v0.4.0-blue" alt="PyPI: 0.4.0" /></a>
   <img src="https://img.shields.io/badge/tests-514%20passed-green" alt="Tests: 514 passed" />
   <img src="https://img.shields.io/badge/python-3.11%2B-purple" alt="Python: 3.11+" />
   <img src="https://img.shields.io/badge/fastapi-0.110%2B-orange" alt="FastAPI: 0.110+" />
@@ -36,8 +36,8 @@ Unlike frameworks that only orchestrate LLM calls, EDAC treats **events as first
 | **Retry / Exponential Backoff** | ✅ Ready | `RetryConfig` with automatic retry on 429, 500, 502, 503, 504 |
 | **Pagination** | ✅ Ready | `PaginatedList[T]` with header-based metadata |
 | **Batch Operations** | ✅ Ready | Submit/create/delete many items in one round-trip |
-| **Webhooks** | ✅ v0.3.2 | Fire-and-forget callbacks when tasks complete |
-| **Error Correlation** | ✅ v0.3.2 | Every exception carries `request_id` from server logs |
+| **Webhooks** | ✅ v0.4.0 | Fire-and-forget callbacks when tasks complete |
+| **Error Correlation** | ✅ v0.4.0 | Every exception carries `request_id` from server logs |
 | **Rate Limiting** | ✅ Ready | Token-bucket per API key or IP |
 | **HITL Approvals** | ✅ Ready | Pause task execution pending human approval |
 | **Auth (RBAC)** | ✅ Ready | Admin / Operator / Viewer roles |

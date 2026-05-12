@@ -316,7 +316,7 @@ class TestCLISmoke:
         runner = CliRunner()
         result = runner.invoke(version)
         assert result.exit_code == 0
-        assert "0.3.2" in result.output
+        assert "0.4.0" in result.output
 
     def test_cli_agents_list_help(self):
         from edac.cli.commands.agents import agents
@@ -371,16 +371,16 @@ class TestVersionBump:
             api_key=None,
         )
         app: FastAPI = create_app(config=cfg)
-        assert app.version == "0.3.2"
+        assert app.version == "0.4.0"
 
     def test_system_router_version(self):
-        """Verify the version in system_router.py is 0.3.2."""
+        """Verify the version in system_router.py is 0.4.0."""
         import inspect
 
         from edac.server.routers import system_router
 
         source = inspect.getsource(system_router)
-        assert 'version="0.3.2"' in source
+        assert 'version="0.4.0"' in source
 
     def test_cli_version(self):
         from edac.cli.main import version
@@ -388,14 +388,14 @@ class TestVersionBump:
 
         runner = CliRunner()
         result = runner.invoke(version)
-        assert "0.3.2" in result.output
+        assert "0.4.0" in result.output
 
     def test_pyproject_version(self):
         import tomllib
 
         with open("pyproject.toml", "rb") as f:
             data = tomllib.load(f)
-        assert data["project"]["version"] == "0.3.2"
+        assert data["project"]["version"] == "0.4.0"
 
 
 # =============================================================================
