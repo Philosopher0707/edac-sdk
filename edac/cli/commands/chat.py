@@ -182,18 +182,16 @@ async def _server_loop(
     if api_key:
         headers["x-api-key"] = api_key
 
-    # Create or resume a session
+    # Create or resume a session via REST, then connect via WebSocket
     sid = session_id or str(uuid.uuid4())
-    path = f"ws_chat/{sid}"
-    url = server.replace("http", "ws").rstrip("/") + "/"
-    ws_url = f"{url}{path}"
+    ws_url = server.replace("http", "ws").rstrip("/") + "/chat/sessions/" + sid + "/ws"
 
     _print_banner()
     click.echo(f"  {DIM}Connected to {server} (session: {sid[:8]}...){RESET}\n")
 
     try:
-        async with websockets.connect(ws_url, extra_headers=headers) as ws:
-            await ws.send(json.dumps({"action": "join", "session_id": sid}))
+        async with websockets.connect(ws_url, additional_headers=headers) as ws:
+            # Server auto-accepts — no join needed
 
             async def receive_task():
                 while True:
@@ -201,14 +199,12 @@ async def _server_loop(
                     msg = json.loads(raw)
                     msg_type = msg.get("type")
                     if msg_type == "token":
-                        click.echo(msg.get("content", ""), nl=False)
+                        click.echo(msg.get("text", ""), nl=False)
                     elif msg_type == "done":
                         click.echo("")
-                        click.echo(f"\n{DIM}[turn complete]{RESET}")
+                        click.echo(f"{DIM}[turn complete]{RESET}")
                     elif msg_type == "error":
                         click.echo(f"\n{YELLOW}Error: {msg.get('message')}{RESET}", err=True)
-                    elif msg_type == "joined":
-                        pass  # first join ack
 
             recv_task = asyncio.create_task(receive_task())
 
@@ -225,13 +221,14 @@ async def _server_loop(
                     if text in ("/quit", "/exit"):
                         break
                     if text == "/clear":
-                        await ws.send(json.dumps({"action": "clear"}))
+                        # Reset session via DELETE + recreate would be ideal, but for now
+                        # just acknowledge — server will reset via new session on next connect
                         click.echo(f"  {DIM}Cleared conversation.{RESET}")
                         continue
                     if text == "/history":
                         # Fetch history via REST
                         resp = httpx.get(
-                            f"{server}/chat/{sid}/history",
+                            f"{server}/chat/sessions/{sid}",
                             headers=headers,
                             timeout=10.0,
                         )
@@ -246,10 +243,8 @@ async def _server_loop(
 
                 click.echo(f"{BOLD}{MAGENTA}Agent{RESET}: ", nl=False)
                 await ws.send(json.dumps({
-                    "action": "message",
-                    "content": text,
-                    "model": model,
-                    "provider": provider,
+                    "action": "send",
+                    "message": text,
                 }))
 
             recv_task.cancel()

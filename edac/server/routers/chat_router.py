@@ -136,9 +136,9 @@ async def create_session(
     store = _get_store(request)
 
     session = store.create_session(
+        agent_id="chat_rest",
         model=req.model,
         provider=req.provider,
-        system_prompt=req.system_prompt,
         title=req.title,
     )
 
@@ -382,15 +382,24 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
       server -> client: {"type": "token", "text": "e"}
       server -> client: {"type": "done", "content": "hello!"}
     """
-    request: Request = websocket.scope.get("request")
-    store = _get_store(request)
-    ctx = _get_ctx(request)
-    registry = _get_registry(request)
+    app = websocket.app
+    store: ChatStore = app.state.chat_store
+    ctx: ContextManager = app.state.ctx
+    registry: ModelRegistry = app.state.registry
     session = store.get_session(session_id)
 
     if session is None:
-        await websocket.close(code=4004, reason="Session not found")
-        return
+        # Auto-create the session if it doesn't exist yet
+        session = store.create_session(
+            agent_id="chat_ws",
+            title="",
+            status="active",
+            model="llama3.2",
+            provider="ollama",
+        )
+        # Track session under both its generated ID and the client-requested ID
+        store._sessions[session_id] = session
+        session.session_id = session_id
 
     await websocket.accept()
     logger.info("WebSocket opened for session %s", session_id)

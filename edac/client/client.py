@@ -389,7 +389,7 @@ class EdacClient:
         uri = f"{ws_url}/tasks/{task_id}/ws"
 
         try:
-            async with websockets.connect(uri, extra_headers=self._headers()) as ws:
+            async with websockets.connect(uri, additional_headers=self._headers()) as ws:
                 while True:
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
