@@ -270,7 +270,7 @@ async def _server_loop(
 @click.command()
 @click.option("--server", default="http://localhost:8000", help="EDAC server URL")
 @click.option("--standalone", is_flag=True, help="Run standalone (no server)")
-@click.option("--model", default=None, help="Model to use")
+@click.option("--model", default="kimi-k2.6:cloud", help="Model to use")
 @click.option("--provider", default="ollama", help="Model provider")
 @click.option("--system-prompt", default="You are a helpful AI assistant.", help="System prompt")
 @click.option("--persona", default=None, help="Persona name (e.g. 'coder', 'teacher')")

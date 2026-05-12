@@ -394,7 +394,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             agent_id="chat_ws",
             title="",
             status="active",
-            model="llama3.2",
+            model=app.state.config.ollama_default_model,
             provider="ollama",
         )
         # Track session under both its generated ID and the client-requested ID

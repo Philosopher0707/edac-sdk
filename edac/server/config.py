@@ -36,7 +36,7 @@ class ServerConfig(BaseSettings):
 
     # Model Providers
     ollama_base_url: str = "http://localhost:11434"
-    ollama_default_model: str = "llama3.2"
+    ollama_default_model: str = "kimi-k2.6:cloud"
     anthropic_api_key: Optional[str] = None
     anthropic_default_model: str = "claude-sonnet-4-6"
     openai_api_key: Optional[str] = None
