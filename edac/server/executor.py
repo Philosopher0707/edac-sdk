@@ -10,7 +10,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from edac.agent.lifecycle import AgentConfig
+from edac.agent.handler_registry import HandlerRegistry
+from edac.agent.lifecycle import AgentConfig, AgentInstance
 from edac.agent.runtime import AgentRuntime
 from edac.context.manager import ContextManager
 from edac.event.bus import EventBus

@@ -374,3 +374,25 @@ async def resume_agent(agent_id: str, request: Request) -> AgentInfo:
         user=getattr(user, "name", None),
     )
     return _to_info(agent)
+
+# ── Templates (user-defined agents) ───────────────────────────────────────
+
+
+@router.get("/agents/templates")
+async def list_agent_templates(request: Request):
+    """List available agent templates (user-defined via @agent decorator)."""
+    from edac.agent.handler_registry import HandlerRegistry
+    from edac.server.schemas import AgentTemplate
+
+    reg = HandlerRegistry.get_default()
+    names = reg.list()
+    templates = [
+        AgentTemplate(
+            name=name,
+            description=f"Custom agent '{name}' — registered via @agent decorator",
+            handler_registered=True,
+            tools=[],
+        )
+        for name in names
+    ]
+    return {"templates": [t.model_dump() for t in templates], "count": len(templates)}

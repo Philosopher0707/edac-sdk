@@ -110,3 +110,12 @@ class TaskUpdate(BaseModel):
     event_type: Optional[str] = None
     payload: Optional[Dict[str, Any]] = None
     timestamp: Optional[str] = None
+
+
+class AgentTemplate(BaseModel):
+    """Metadata for a user-registered agent template."""
+
+    name: str = Field(..., description="Agent name used in HandlerRegistry")
+    description: str = Field(default="", description="Human-readable description")
+    handler_registered: bool = Field(default=False, description="Whether a custom handler exists")
+    tools: List[str] = Field(default_factory=list, description="Tool names available to this agent")

@@ -183,6 +183,16 @@ async def lifespan(app: FastAPI):
     chat_store = ChatStore()
     app.state.chat_store = chat_store
 
+    # Register built-in chat tools so the chat agent can interact with EDAC
+    from edac.server.chat_tools import register_chat_tools
+    registered = register_chat_tools(tool_registry)
+    logger.info("Registered %d chat tools", registered)
+
+    # Auto-load user-defined agents from agents/ directory
+    from edac.server.user_agents import load_user_agents
+    loaded = load_user_agents()
+    logger.info("Loaded %d user agent modules", len(loaded))
+
     # RuntimeContext — central DI container
     app.state.ctx_runtime = RuntimeContext(
         bus=bus,
