@@ -64,6 +64,15 @@ class EdacClientSync:
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
+        self._closed = False
+
+    def __repr__(self) -> str:
+        api_key_hint = "***" if self._async_client.api_key else None
+        running = self._thread.is_alive() and not self._loop.is_closed()
+        return (
+            f"<EdacClientSync(base_url={self._async_client.base_url!r}, "
+            f"api_key={api_key_hint!r}, running={running})>"
+        )
 
     # ── Internal helpers ──
 
@@ -120,6 +129,23 @@ class EdacClientSync:
 
     def get_task(self, task_id: str) -> TaskResponse:
         return self._run(self._async_client.get_task(task_id))
+
+    def wait_for_task(
+        self,
+        task_id: str,
+        *,
+        poll_interval: float = 1.0,
+        timeout: float = 60.0,
+    ) -> TaskResponse:
+        """Poll ``get_task`` until terminal status (sync wrapper).
+
+        Convenience wrapper that delegates to the async implementation.
+        """
+        return self._run(
+            self._async_client.wait_for_task(
+                task_id, poll_interval=poll_interval, timeout=timeout
+            )
+        )
 
     def cancel_task(self, task_id: str) -> TaskResponse:
         return self._run(self._async_client.cancel_task(task_id))

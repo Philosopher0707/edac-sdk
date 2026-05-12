@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
 import httpx
@@ -72,6 +73,14 @@ class EdacClient:
             limits=limits or _default_limits(keepalive_expiry),
             http2=http2,
             headers=self._headers(),
+        )
+        self._closed = False
+
+    def __repr__(self) -> str:
+        api_key_hint = "***" if self.api_key else None
+        return (
+            f"<EdacClient(base_url={self.base_url!r}, "
+            f"api_key={api_key_hint!r}, timeout={self._client.timeout})>"
         )
 
     # ── Internal helpers ──
@@ -382,6 +391,42 @@ class EdacClient:
         except Exception as exc:
             raise EdacStreamError(f"WebSocket stream failed for task {task_id}: {exc}") from exc
 
+    # ── Waiting ──
+
+    async def wait_for_task(
+        self,
+        task_id: str,
+        *,
+        poll_interval: float = 1.0,
+        timeout: float = 60.0,
+    ) -> TaskResponse:
+        """Poll ``get_task`` until the task reaches a terminal status.
+
+        Args:
+            task_id: The task to wait for.
+            poll_interval: Seconds between polls (default 1.0).
+            timeout: Maximum seconds to wait (default 60.0).
+
+        Returns:
+            The final :class:`TaskResponse`.
+
+        Raises:
+            EdacClientError: If *timeout* is exceeded.
+        """
+        terminal = {"completed", "failed", "cancelled"}
+        deadline = time.monotonic() + timeout
+        while True:
+            task = await self.get_task(task_id)
+            logger.debug("wait_for_task %s: status=%s", task_id, task.status)
+            if task.status in terminal:
+                return task
+            if time.monotonic() > deadline:
+                raise EdacClientError(
+                    f"Timeout waiting for task {task_id} after {timeout}s "
+                    f"(last status: {task.status})"
+                )
+            await asyncio.sleep(poll_interval)
+
     # ── System ──
 
     async def get_health(self) -> HealthResponse:
@@ -394,6 +439,9 @@ class EdacClient:
     # ── Context manager ──
 
     async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         await self._client.aclose()
 
     async def __aenter__(self) -> EdacClient:
