@@ -39,7 +39,7 @@ from edac.server.config import ServerConfig
 from edac.server.context import RuntimeContext
 from edac.server.executor import AgentExecutor
 from edac.server.rate_limiter import RateLimiter
-from edac.server.routers import agents_router, approval_router, memory_router, modality_router, protocol_router, system_router, tasks_router
+from edac.server.routers import agents_router, approval_router, chat_router, memory_router, modality_router, protocol_router, system_router, tasks_router
 from edac.server.store import create_store
 from edac.server.tracing import clear_request_id, get_request_id, set_request_id
 from edac.observability.tracing import Tracer
@@ -177,6 +177,12 @@ async def lifespan(app: FastAPI):
     webhook_registry = TaskWebhookRegistry()
     webhook_dispatcher = WebhookDispatcher()
 
+    # Chat store for session management
+    from edac.chat.store import ChatStore
+
+    chat_store = ChatStore()
+    app.state.chat_store = chat_store
+
     # RuntimeContext — central DI container
     app.state.ctx_runtime = RuntimeContext(
         bus=bus,
@@ -199,7 +205,8 @@ async def lifespan(app: FastAPI):
         tracer=tracer,
         approval_manager=approval_manager,
         modality_dispatcher=modality_dispatcher,
-    )
+        chat_store=chat_store,
+)
 
     app.state.bus = bus
     app.state.runtime = runtime
@@ -251,7 +258,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     app = FastAPI(
         title="EDAC",
         description="Event-Driven Agentic Core — Production API",
-        version="0.3.0",
+        version="0.3.2",
         lifespan=lifespan,
     )
     app.state.config = cfg
@@ -347,6 +354,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     app.include_router(tasks_router.router)
     app.include_router(agents_router.router)
     app.include_router(approval_router.router)
+    app.include_router(chat_router.router)
     app.include_router(memory_router.router)
     app.include_router(modality_router.router)
     app.include_router(system_router.router)

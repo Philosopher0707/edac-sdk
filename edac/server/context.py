@@ -65,3 +65,6 @@ class RuntimeContext:
 
     # Phase 4.3 — Modality
     modality_dispatcher: Optional[Any] = None
+
+    # Phase 5 — Chat sessions
+    chat_store: Optional[Any] = None

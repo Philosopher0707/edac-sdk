@@ -21,13 +21,14 @@ import click
 import uvicorn
 
 from edac.cli.commands.agents import agents
+from edac.cli.commands.chat import chat
 from edac.cli.commands.events import events
 from edac.cli.commands.tasks import tasks
 from edac.cli.commands.webhooks import webhooks
 from edac.server.api import create_app
 from edac.server.config import ServerConfig
 
-EDAC_VERSION = "0.3.0"
+EDAC_VERSION = "0.3.2"
 
 logger = logging.getLogger("edac.cli")
 
@@ -67,6 +68,7 @@ cli.add_command(agents)
 cli.add_command(tasks)
 cli.add_command(events)
 cli.add_command(webhooks)
+cli.add_command(chat)
 
 
 @cli.command()
@@ -286,7 +288,7 @@ def approve_gate(trigger: str, approver: str, server: str) -> None:
 @cli.command()
 def version() -> None:
     """Show EDAC version."""
-    click.echo("EDAC 0.3.0")
+    click.echo("EDAC 0.3.2")
 
 
 def main() -> None:
