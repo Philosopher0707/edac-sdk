@@ -18,6 +18,7 @@ class ChatMessage:
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = field(default_factory=dict)
+    message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
 @dataclass
@@ -67,11 +68,20 @@ class ChatStore:
         """Retrieve a session by ID."""
         return self._sessions.get(str(session_id))
 
-    def list_sessions(self, status: Optional[str] = None) -> List[ChatSession]:
-        """List all sessions, optionally filtered by status."""
+    def list_sessions(
+        self,
+        status: Optional[str] = None,
+        limit: int = 0,
+        offset: int = 0,
+    ) -> List[ChatSession]:
+        """List all sessions, optionally filtered by status, with pagination."""
         sessions = list(self._sessions.values())
         if status:
             sessions = [s for s in sessions if s.status == status]
+        if offset:
+            sessions = sessions[offset:]
+        if limit:
+            sessions = sessions[:limit]
         return sessions
 
     def update_session(
@@ -127,6 +137,10 @@ class ChatStore:
     def clear(self) -> None:
         """Remove all sessions."""
         self._sessions.clear()
+
+    async def close(self) -> None:
+        """Close the store. In-memory version is a no-op."""
+        pass
 
     def _maybe_evict(self) -> None:
         """Evict oldest sessions if over max capacity."""

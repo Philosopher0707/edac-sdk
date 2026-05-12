@@ -29,6 +29,7 @@ class ServerConfig(BaseSettings):
     # Database
     database_url: str = "sqlite+aiosqlite:///./edac.db"
     db_pool_size: int = 5
+    chat_db_path: str = "data/chat.db"
 
     # Security
     api_key: Optional[str] = None

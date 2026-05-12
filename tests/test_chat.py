@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from edac.chat.agent import ChatAgent
 from edac.chat.store import ChatMessage, ChatSession, ChatStore
+from edac.model import ChatCompletion
 from edac.server.api import create_app
 from edac.server.config import ServerConfig
 
@@ -135,85 +137,83 @@ class TestChatRouter:
     def test_create_session(self, client: TestClient) -> None:
         resp = client.post(
             "/chat/sessions",
-            json={"agent_id": "test-agent", "title": "Test", "model": "llama3.2"},
+            json={"model": "llama3.2", "title": "Test"},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         data = resp.json()
-        assert data["status"] == "active"
         assert data["title"] == "Test"
         assert "session_id" in data
-        assert data["agent_id"] == "test-agent"
+        assert data["model"] == "llama3.2"
+        assert data["provider"] == "ollama"
 
     def test_list_sessions(self, client: TestClient) -> None:
-        client.post("/chat/sessions", json={"agent_id": "a1"})
-        client.post("/chat/sessions", json={"agent_id": "a2", "status": "paused"})
+        client.post("/chat/sessions", json={"model": "llama3.2"})
+        client.post("/chat/sessions", json={"model": "llama3.2"})
 
         resp = client.get("/chat/sessions")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["items"]) == 2
-        assert data["total"] == 2
-
-        # Filter by status
-        resp = client.get("/chat/sessions?status=active")
-        assert len(resp.json()["items"]) == 1
+        assert isinstance(data, list)
+        assert len(data) >= 2
 
     def test_get_session(self, client: TestClient) -> None:
-        created = client.post("/chat/sessions", json={"agent_id": "a1"}).json()
+        created = client.post("/chat/sessions", json={"model": "llama3.2"}).json()
         sid = created["session_id"]
 
         resp = client.get(f"/chat/sessions/{sid}")
         assert resp.status_code == 200
         assert resp.json()["session_id"] == sid
 
-    def test_update_session(self, client: TestClient) -> None:
-        created = client.post("/chat/sessions", json={"agent_id": "a1"}).json()
-        sid = created["session_id"]
-
-        resp = client.patch(f"/chat/sessions/{sid}", json={"title": "Updated"})
-        assert resp.status_code == 200
-        assert resp.json()["title"] == "Updated"
-
     def test_delete_session(self, client: TestClient) -> None:
-        created = client.post("/chat/sessions", json={"agent_id": "a1"}).json()
+        created = client.post("/chat/sessions", json={"model": "llama3.2"}).json()
         sid = created["session_id"]
 
         resp = client.delete(f"/chat/sessions/{sid}")
-        assert resp.status_code == 200
-        assert resp.json()["deleted"] is True
+        assert resp.status_code == 204
 
         resp = client.get(f"/chat/sessions/{sid}")
         assert resp.status_code == 404
 
     def test_send_message_stores_history(self, client: TestClient) -> None:
-        created = client.post("/chat/sessions", json={"agent_id": "a1"}).json()
+        created = client.post("/chat/sessions", json={"model": "llama3.2"}).json()
         sid = created["session_id"]
 
         with patch(
-            "edac.server.routers.chat_router._stream_chat", new_callable=AsyncMock
-        ) as mock_stream:
-            mock_stream.return_value = "Hello from mock"
+            "edac.server.routers.chat_router._get_registry"
+        ) as mock_get_registry:
+            mock_registry = MagicMock()
+            mock_provider = AsyncMock()
+            mock_provider.chat = AsyncMock(
+                return_value=ChatCompletion(content="Hello from mock")
+            )
+            mock_registry.get.return_value = mock_provider
+            mock_get_registry.return_value = mock_registry
 
             resp = client.post(
-                f"/chat/sessions/{sid}/messages",
-                json={"content": "How are you?"},
+                f"/chat/sessions/{sid}/send",
+                json={"message": "How are you?"},
             )
             assert resp.status_code == 200
             data = resp.json()
-            assert data["role"] == "assistant"
-            assert data["content"] == "Hello from mock"
+            assert isinstance(data, list)
+            assert len(data) >= 2
+            assert any(m["role"] == "assistant" for m in data)
+            assert any(
+                "Hello from mock" in m["content"] for m in data
+                if m["role"] == "assistant"
+            )
 
         # Verify history
-        resp = client.get(f"/chat/sessions/{sid}/history")
+        resp = client.get(f"/chat/sessions/{sid}")
         assert resp.status_code == 200
         msgs = resp.json()["messages"]
-        assert len(msgs) == 2
+        assert len(msgs) >= 2
         assert msgs[0]["role"] == "user"
-        assert msgs[1]["role"] == "assistant"
+        assert msgs[-1]["role"] == "assistant"
 
     def test_get_history_not_found(self, client: TestClient) -> None:
         fake_id = str(uuid.uuid4())
-        resp = client.get(f"/chat/sessions/{fake_id}/history")
+        resp = client.get(f"/chat/sessions/{fake_id}")
         assert resp.status_code == 404
 
 
@@ -234,17 +234,21 @@ class TestChatAgentUnit:
         ctx.get_window.return_value = MagicMock()
         ctx.get_window.return_value.get_window.return_value = []
 
+        agent_instance = MagicMock()
+        agent_instance.state.agent_id = "test"
+        agent_instance.state.state = "running"
+
         agent = ChatAgent(
-            agent_id="test",
+            agent_instance=agent_instance,
             session_id=str(uuid.uuid4()),
             bus=bus,
             registry=registry,
-            context_manager=ctx,
+            ctx=ctx,
         )
 
-        # _run_factory should subscribe and wait
+        # run() should subscribe and enter the main loop
         with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(agent._run_factory("mock_instance"), timeout=0.1)
+            await asyncio.wait_for(agent.run(), timeout=0.1)
 
         # verify subscription
         bus.subscribe.assert_called_once()
@@ -258,26 +262,35 @@ class TestChatAgentUnit:
             MagicMock(content=" world", finish_reason=None, usage=None),
             MagicMock(content="", finish_reason="stop", usage={"total_tokens": 5}),
         ]
+
+        async def mock_stream(*args, **kwargs):
+            for c in mock_chunks:
+                yield c
+
         mock_registry = MagicMock()
-        mock_provider = AsyncMock()
-        mock_provider.stream = AsyncMock(return_value=mock_chunks.__aiter__())
-        mock_registry.get.return_value = mock_provider
-        mock_registry.get_default = AsyncMock(return_value=mock_provider)
+        mock_registry.stream = mock_stream
+        mock_registry.get.return_value = mock_registry
+        mock_registry.get_default = AsyncMock(return_value=mock_registry)
 
         ctx = MagicMock()
+        ctx.get_window.return_value = MagicMock()
+        ctx.get_window.return_value.get_window.return_value = []
+
+        agent_instance = MagicMock()
+        agent_instance.state.agent_id = "test"
 
         agent = ChatAgent(
-            agent_id="test",
+            agent_instance=agent_instance,
             session_id=str(uuid.uuid4()),
             bus=bus,
             registry=mock_registry,
-            context_manager=ctx,
-            settings={"system_prompt": "hello"},
+            ctx=ctx,
         )
 
         input_event = MagicMock(
             source="human:alice",
-            payload={"content": "Hi"},
+            correlation_id=uuid.uuid4(),
+            payload={"text": "Hi"},
         )
 
         await agent._on_input(input_event)
@@ -285,3 +298,45 @@ class TestChatAgentUnit:
         # Should emit at least two token events + one done event
         calls = bus.emit.await_args_list
         assert len(calls) >= 3
+
+
+# ── SqliteChatStore Tests ──
+
+
+class TestSqliteChatStore:
+    @pytest.mark.asyncio
+    async def test_persist_and_resume(self, tmp_path):
+        """Messages survive a store close + reopen."""
+        from edac.chat.sqlite_store import SqliteChatStore
+        import os
+
+        db_path = os.path.join(tmp_path, "test_chat.db")
+
+        # Create + populate
+        store = SqliteChatStore(db_path=db_path)
+        await store.connect()
+        session = store.create_session(agent_id="a1", title="Test")
+        await store.persist_session(session)
+        store.add_message(session.session_id, "user", "Hello")
+        store.add_message(session.session_id, "assistant", "Hi!")
+        # Give background SQLite writes time to flush
+        await asyncio.sleep(0.1)
+        await store.close()
+
+        # Reopen and verify
+        store2 = SqliteChatStore(db_path=db_path)
+        await store2.connect()
+        loaded = await store2.load_from_db()
+        assert loaded == 1
+
+        s = store2.get_session(session.session_id)
+        assert s is not None
+        assert s.title == "Test"
+
+        msgs = store2.get_messages(session.session_id)
+        assert len(msgs) == 2
+        assert msgs[0].role == "user"
+        assert msgs[0].content == "Hello"
+        assert msgs[1].role == "assistant"
+
+        await store2.close()

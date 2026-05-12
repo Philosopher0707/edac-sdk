@@ -178,9 +178,11 @@ async def lifespan(app: FastAPI):
     webhook_dispatcher = WebhookDispatcher()
 
     # Chat store for session management
-    from edac.chat.store import ChatStore
+    from edac.chat.sqlite_store import SqliteChatStore
 
-    chat_store = ChatStore()
+    chat_store = SqliteChatStore(db_path=cfg.chat_db_path or "data/chat.db")
+    await chat_store.connect()
+    await chat_store.load_from_db()
     app.state.chat_store = chat_store
 
     # Register built-in chat tools so the chat agent can interact with EDAC
@@ -251,6 +253,7 @@ async def lifespan(app: FastAPI):
     await runtime.stop()
     await bus.stop()
     await store.close()
+    await chat_store.close()
     await ollama.close()
     if anthropic:
         await anthropic.close()

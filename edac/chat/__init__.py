@@ -8,5 +8,6 @@ Provides:
 
 from edac.chat.agent import ChatAgent
 from edac.chat.store import ChatStore, ChatSession, ChatMessage
+from edac.chat.sqlite_store import SqliteChatStore
 
-__all__ = ["ChatAgent", "ChatStore", "ChatSession", "ChatMessage"]
+__all__ = ["ChatAgent", "ChatStore", "ChatSession", "ChatMessage", "SqliteChatStore"]
