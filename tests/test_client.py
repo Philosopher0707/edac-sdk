@@ -418,11 +418,15 @@ class TestEdacClientSDK:
 
 
 class TestEdacClientSync:
-    @pytest.mark.skip(reason="ASGI transport cannot be shared across event loops; sync logic covered by mocked tests in test_client_extended.py")
+    @pytest.mark.skip(
+        reason="ASGI transport cannot be shared across event loops; sync logic covered by mocked tests in test_client_extended.py"
+    )
     def test_sync_create_and_list(self):
         pass
 
-    @pytest.mark.skip(reason="ASGI transport cannot be shared across event loops; sync logic covered by mocked tests in test_client_extended.py")
+    @pytest.mark.skip(
+        reason="ASGI transport cannot be shared across event loops; sync logic covered by mocked tests in test_client_extended.py"
+    )
     def test_sync_context_manager(self):
         pass
 

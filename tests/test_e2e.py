@@ -30,6 +30,7 @@ from edac.tool.registry import ToolRegistry, ToolSpec
 
 # ── Fixtures ───────────────────────────────────────────────
 
+
 class _MockProvider(ModelProvider):
     """Configurable mock that tracks calls and returns keyword-matched responses."""
 
@@ -79,11 +80,14 @@ def mock_provider(registry: ModelRegistry) -> _MockProvider:
 
 # ── E2E: Full Executor Chain ─────────────────────────────────
 
+
 class TestE2EExecutor:
     """Tests AgentExecutor end-to-end with mocked LLM."""
 
     @pytest.mark.asyncio
-    async def test_pipeline_executes_all_agents(self, registry: ModelRegistry, mock_provider: _MockProvider):
+    async def test_pipeline_executes_all_agents(
+        self, registry: ModelRegistry, mock_provider: _MockProvider
+    ):
         """Pipeline with 3 agents runs sequentially and produces artifacts."""
         bus = EventBus()
         ctx = ContextManager(registry=registry, config=ContextConfig(default_provider="mock"))
@@ -166,7 +170,9 @@ class TestE2EExecutor:
                 assert len(result.artifacts) >= 2
 
     @pytest.mark.asyncio
-    async def test_executor_with_tools_react_loop(self, registry: ModelRegistry, mock_provider: _MockProvider):
+    async def test_executor_with_tools_react_loop(
+        self, registry: ModelRegistry, mock_provider: _MockProvider
+    ):
         """Executor runs ReAct loop when tool calls are present in LLM response."""
         # Configure mock to emit a JSON tool call on first invocation, then a plain answer
         first_call = True
@@ -199,15 +205,24 @@ class TestE2EExecutor:
         t_registry.register("tool_mock", ToolProvider())
 
         tools = ToolRegistry()
+
         async def double_tool(n: int) -> str:
             return str(n * 2)
+
         tools.register(
-            ToolSpec(name="double", description="Double a number", parameters={"n": {"type": "int"}}, returns={"result": {"type": "string"}}),
+            ToolSpec(
+                name="double",
+                description="Double a number",
+                parameters={"n": {"type": "int"}},
+                returns={"result": {"type": "string"}},
+            ),
             double_tool,
         )
 
         bus = EventBus()
-        ctx = ContextManager(registry=t_registry, config=ContextConfig(default_provider="tool_mock"))
+        ctx = ContextManager(
+            registry=t_registry, config=ContextConfig(default_provider="tool_mock")
+        )
 
         async with bus:
             async with AgentRuntime(bus) as runtime:
@@ -256,6 +271,7 @@ class TestE2EExecutor:
 
 
 # ── E2E: Event Bus + Router ──────────────────────────────────
+
 
 class TestE2EEventFlow:
     """Tests event flow through Bus → Router → Subscribers."""
@@ -306,12 +322,14 @@ class TestE2EEventFlow:
         async with bus:
             bus.subscribe(handler_a, topics=["fanout"])
             bus.subscribe(handler_b, topics=["fanout"])
-            await bus.emit(create_event(
-                event_type=EventType.SYSTEM_LOG,
-                source="system:test",
-                topic="fanout",
-                payload={},
-            ))
+            await bus.emit(
+                create_event(
+                    event_type=EventType.SYSTEM_LOG,
+                    source="system:test",
+                    topic="fanout",
+                    payload={},
+                )
+            )
             await asyncio.sleep(0.1)
 
         assert len(received_a) == 1
@@ -327,30 +345,37 @@ class TestE2EEventFlow:
             return True
 
         from edac.event.schema import EventPriority
+
         bus = EventBus()
         async with bus:
             bus.subscribe(handler, topics=["prio"])
-            await bus.emit(create_event(
-                event_type=EventType.SYSTEM_LOG,
-                source="system:test",
-                topic="prio",
-                priority=EventPriority.LOW,
-                payload={},
-            ))
-            await bus.emit(create_event(
-                event_type=EventType.SYSTEM_LOG,
-                source="system:test",
-                topic="prio",
-                priority=EventPriority.HIGH,
-                payload={},
-            ))
-            await bus.emit(create_event(
-                event_type=EventType.SYSTEM_LOG,
-                source="system:test",
-                topic="prio",
-                priority=EventPriority.NORMAL,
-                payload={},
-            ))
+            await bus.emit(
+                create_event(
+                    event_type=EventType.SYSTEM_LOG,
+                    source="system:test",
+                    topic="prio",
+                    priority=EventPriority.LOW,
+                    payload={},
+                )
+            )
+            await bus.emit(
+                create_event(
+                    event_type=EventType.SYSTEM_LOG,
+                    source="system:test",
+                    topic="prio",
+                    priority=EventPriority.HIGH,
+                    payload={},
+                )
+            )
+            await bus.emit(
+                create_event(
+                    event_type=EventType.SYSTEM_LOG,
+                    source="system:test",
+                    topic="prio",
+                    priority=EventPriority.NORMAL,
+                    payload={},
+                )
+            )
             await asyncio.sleep(0.2)
 
         # HIGH (-50) should be first, then NORMAL (0), then LOW (50)
@@ -360,6 +385,7 @@ class TestE2EEventFlow:
 
 
 # ── E2E: Plan Engine + DAG ───────────────────────────────────
+
 
 class TestE2EPlanExecution:
     """Tests PlanEngine with real step execution."""
@@ -381,6 +407,7 @@ class TestE2EPlanExecution:
 
         async def step_executor(step: Step) -> str:
             import time
+
             start_times[step.id] = time.monotonic()
             execution_order.append(step.id)
             await asyncio.sleep(0.05)  # Simulate work
@@ -443,6 +470,7 @@ class TestE2EPlanExecution:
         plan.add_step(Step(id="s1", description="Step", action="noop"))
 
         async with bus:
+
             async def executor(step: Step) -> str:
                 return "ok"
 

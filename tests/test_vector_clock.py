@@ -214,12 +214,18 @@ class TestEventBusVectorClock:
     async def test_event_model_helpers(self):
         """Event helper methods for vector clock comparison."""
         e1 = create_event(
-            EventType.AGENT_SPAWN, "agent:a", "test",
-            payload={}, causality_vector={"a": 1},
+            EventType.AGENT_SPAWN,
+            "agent:a",
+            "test",
+            payload={},
+            causality_vector={"a": 1},
         )
         e2 = create_event(
-            EventType.AGENT_HEARTBEAT, "agent:a", "test",
-            payload={}, causality_vector={"a": 2},
+            EventType.AGENT_HEARTBEAT,
+            "agent:a",
+            "test",
+            payload={},
+            causality_vector={"a": 2},
         )
         assert e1.happens_before(e2)
         assert e2.happens_after(e1)
@@ -229,12 +235,18 @@ class TestEventBusVectorClock:
     async def test_concurrent_events(self):
         """Two events from different nodes with no causal link are concurrent."""
         e1 = create_event(
-            EventType.AGENT_SPAWN, "agent:a", "test",
-            payload={}, causality_vector={"a": 1},
+            EventType.AGENT_SPAWN,
+            "agent:a",
+            "test",
+            payload={},
+            causality_vector={"a": 1},
         )
         e2 = create_event(
-            EventType.AGENT_SPAWN, "agent:b", "test",
-            payload={}, causality_vector={"b": 1},
+            EventType.AGENT_SPAWN,
+            "agent:b",
+            "test",
+            payload={},
+            causality_vector={"b": 1},
         )
         assert e1.concurrent_with(e2)
         assert e2.concurrent_with(e1)

@@ -21,6 +21,7 @@ logger = logging.getLogger("edac.model")
 @dataclass
 class ChatMessage:
     """A single message in a chat conversation."""
+
     role: str  # "system", "user", "assistant", "tool"
     content: str
     name: Optional[str] = None
@@ -30,6 +31,7 @@ class ChatMessage:
 @dataclass
 class ChatCompletion:
     """Result from a chat completion request."""
+
     content: str
     model: str = ""
     usage: Dict[str, int] = field(default_factory=dict)
@@ -40,6 +42,7 @@ class ChatCompletion:
 @dataclass
 class StreamingChunk:
     """A single chunk from a streaming response."""
+
     content: str
     finish_reason: Optional[str] = None
     usage: Optional[Dict[str, int]] = None

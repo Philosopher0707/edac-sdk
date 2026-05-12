@@ -194,10 +194,14 @@ async def cancel_task(task_id: str, request: Request) -> TaskResponse:
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     if record.status in ("completed", "failed", "cancelled"):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Task already {record.status}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=f"Task already {record.status}"
+        )
 
     await worker.cancel_task(task_id)
-    log_audit(ACTION_SUBMIT_TASK, f"/tasks/{task_id}/cancel", "success", user=getattr(user, "name", None))
+    log_audit(
+        ACTION_SUBMIT_TASK, f"/tasks/{task_id}/cancel", "success", user=getattr(user, "name", None)
+    )
     record = await store.get_task(task_id)
     return _task_to_response(record)
 
@@ -213,7 +217,9 @@ async def get_task_events(task_id: str, request: Request) -> List[Dict[str, Any]
 
     store: TaskStore = app.state.store
     events = await store.get_events(task_id)
-    log_audit(ACTION_GET_EVENTS, f"/tasks/{task_id}/events", "success", user=getattr(user, "name", None))
+    log_audit(
+        ACTION_GET_EVENTS, f"/tasks/{task_id}/events", "success", user=getattr(user, "name", None)
+    )
     return events
 
 
@@ -266,19 +272,23 @@ async def task_websocket(websocket: WebSocket, task_id: str):
                 task = await store.get_task(task_id)
                 if task and task.status != last_status:
                     last_status = task.status
-                    await websocket.send_json({
-                        "type": "task.status",
-                        "task_id": task_id,
-                        "status": task.status,
-                        "result": task.result,
-                        "error": task.error,
-                        "updated_at": task.updated_at,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "task.status",
+                            "task_id": task_id,
+                            "status": task.status,
+                            "result": task.result,
+                            "error": task.error,
+                            "updated_at": task.updated_at,
+                        }
+                    )
                     # Fire webhooks on terminal status transitions
                     terminal = {"completed", "failed", "cancelled"}
                     if task.status in terminal:
                         registry: TaskWebhookRegistry = getattr(app.state, "webhook_registry", None)
-                        dispatcher: WebhookDispatcher = getattr(app.state, "webhook_dispatcher", None)
+                        dispatcher: WebhookDispatcher = getattr(
+                            app.state, "webhook_dispatcher", None
+                        )
                         if registry and dispatcher:
                             configs = registry.get(task_id)
                             if configs:
@@ -288,22 +298,22 @@ async def task_websocket(websocket: WebSocket, task_id: str):
                                     "error": task.error,
                                 }
                                 for cfg in configs:
-                                    asyncio.create_task(
-                                        dispatcher.deliver(cfg, task_id, payload)
-                                    )
+                                    asyncio.create_task(dispatcher.deliver(cfg, task_id, payload))
 
                 events = await store.get_events(task_id)
                 new_events = [e for e in events if e.get("id", 0) > last_event_id]
                 if new_events:
                     last_event_id = max(e.get("id", 0) for e in new_events)
                     for evt in new_events:
-                        await websocket.send_json({
-                            "type": "task.event",
-                            "task_id": task_id,
-                            "event_type": evt.get("event_type"),
-                            "payload": evt.get("payload"),
-                            "timestamp": evt.get("timestamp"),
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "task.event",
+                                "task_id": task_id,
+                                "event_type": evt.get("event_type"),
+                                "payload": evt.get("payload"),
+                                "timestamp": evt.get("timestamp"),
+                            }
+                        )
             except Exception:
                 break
             await asyncio.sleep(0.5)

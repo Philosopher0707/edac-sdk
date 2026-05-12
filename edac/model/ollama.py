@@ -44,7 +44,9 @@ class OllamaProvider(ModelProvider):
         """Check if ollama server is reachable (async)."""
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/tags", timeout=aiohttp.ClientTimeout(total=2)) as resp:
+            async with session.get(
+                f"{self.base_url}/api/tags", timeout=aiohttp.ClientTimeout(total=2)
+            ) as resp:
                 return resp.status == 200
         except Exception:
             return False

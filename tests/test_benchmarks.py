@@ -27,11 +27,11 @@ from edac.plan.parallelizer import Parallelizer
 
 # ── Benchmark Helpers ───────────────────────────────────────
 
-MAX_EVENT_BUS_MS = 500.0       # 1000 events through bus
-MAX_PLAN_DAG_MS = 200.0       # Build + resolve 100-step DAG
-MAX_COMPRESS_MS = 300.0       # Compress 1000-entry window
-MAX_MEMORY_MS = 200.0         # Store + search 500 long-term entries
-MAX_PARALLELIZER_MS = 100.0   # Detect parallel groups in 50-step DAG
+MAX_EVENT_BUS_MS = 500.0  # 1000 events through bus
+MAX_PLAN_DAG_MS = 200.0  # Build + resolve 100-step DAG
+MAX_COMPRESS_MS = 300.0  # Compress 1000-entry window
+MAX_MEMORY_MS = 200.0  # Store + search 500 long-term entries
+MAX_PARALLELIZER_MS = 100.0  # Detect parallel groups in 50-step DAG
 
 
 class TestEventBusBenchmark:
@@ -53,12 +53,14 @@ class TestEventBusBenchmark:
         async with bus:
             start = time.monotonic()
             for i in range(1000):
-                await bus.emit(create_event(
-                    event_type=EventType.SYSTEM_LOG,
-                    source="system:bench",
-                    topic="bench.throughput",
-                    payload={"i": i},
-                ))
+                await bus.emit(
+                    create_event(
+                        event_type=EventType.SYSTEM_LOG,
+                        source="system:bench",
+                        topic="bench.throughput",
+                        payload={"i": i},
+                    )
+                )
             # Wait for queue drain
             while bus.get_stats().queue_depth > 0:
                 await asyncio.sleep(0.01)
@@ -75,13 +77,15 @@ class TestEventBusBenchmark:
         async with bus:
             start = time.monotonic()
             for i in range(500):
-                await bus.emit(create_event(
-                    event_type=EventType.SYSTEM_LOG,
-                    source="system:bench",
-                    topic="bench.prio",
-                    priority=[0, 50, -50, -50, 0][i % 5],
-                    payload={},
-                ))
+                await bus.emit(
+                    create_event(
+                        event_type=EventType.SYSTEM_LOG,
+                        source="system:bench",
+                        topic="bench.prio",
+                        priority=[0, 50, -50, -50, 0][i % 5],
+                        payload={},
+                    )
+                )
             elapsed = (time.monotonic() - start) * 1000
 
         assert elapsed < MAX_EVENT_BUS_MS, f"Priority queue too slow: {elapsed:.1f}ms"
@@ -95,8 +99,10 @@ class TestPlanDAGBenchmark:
         start = time.monotonic()
         dag = PlanDAG(goal="Large benchmark DAG")
         for i in range(100):
-            deps = [f"step_{i-1}"] if i > 0 else []
-            dag.add_step(Step(id=f"step_{i}", description=f"Step {i}", action="noop", dependencies=deps))
+            deps = [f"step_{i - 1}"] if i > 0 else []
+            dag.add_step(
+                Step(id=f"step_{i}", description=f"Step {i}", action="noop", dependencies=deps)
+            )
         elapsed = (time.monotonic() - start) * 1000
 
         assert len(dag.list_steps()) == 100
@@ -106,8 +112,10 @@ class TestPlanDAGBenchmark:
         """Topological sort of 100-step DAG should be <50ms."""
         dag = PlanDAG(goal="Sort benchmark")
         for i in range(100):
-            deps = [f"step_{i-1}"] if i > 0 else []
-            dag.add_step(Step(id=f"step_{i}", description=f"Step {i}", action="noop", dependencies=deps))
+            deps = [f"step_{i - 1}"] if i > 0 else []
+            dag.add_step(
+                Step(id=f"step_{i}", description=f"Step {i}", action="noop", dependencies=deps)
+            )
 
         start = time.monotonic()
         order = dag.topological_order()
@@ -123,7 +131,7 @@ class TestPlanDAGBenchmark:
         for layer in range(5):
             for i in range(10):
                 step_id = f"L{layer}_S{i}"
-                deps = [f"L{layer-1}_S0"] if layer > 0 else []
+                deps = [f"L{layer - 1}_S0"] if layer > 0 else []
                 dag.add_step(Step(id=step_id, description="work", action="noop", dependencies=deps))
 
         parallelizer = Parallelizer(dag)
@@ -188,13 +196,15 @@ class TestMemoryBenchmark:
 
         start = time.monotonic()
         for i in range(1000):
-            memory.append(create_event(
-                event_type=EventType.SYSTEM_LOG,
-                source="system:bench",
-                topic="bench.episodic",
-                correlation_id=corr,
-                payload={"i": i},
-            ))
+            memory.append(
+                create_event(
+                    event_type=EventType.SYSTEM_LOG,
+                    source="system:bench",
+                    topic="bench.episodic",
+                    correlation_id=corr,
+                    payload={"i": i},
+                )
+            )
         elapsed_append = (time.monotonic() - start) * 1000
 
         start = time.monotonic()

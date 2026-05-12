@@ -33,15 +33,18 @@ class TestServerTasks:
     def test_submit_task(self):
         app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))
         with TestClient(app) as client:
-            response = client.post("/tasks", json={
-                "goal": "Build a REST API",
-                "pattern": "pipeline",
-                "agents": [
-                    {"name": "planner", "role": "orchestrator"},
-                    {"name": "coder", "role": "worker"},
-                ],
-                "max_parallel": 2,
-            })
+            response = client.post(
+                "/tasks",
+                json={
+                    "goal": "Build a REST API",
+                    "pattern": "pipeline",
+                    "agents": [
+                        {"name": "planner", "role": "orchestrator"},
+                        {"name": "coder", "role": "worker"},
+                    ],
+                    "max_parallel": 2,
+                },
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["goal"] == "Build a REST API"
@@ -69,11 +72,14 @@ class TestServerTasks:
     def test_submit_invalid_pattern(self):
         app = create_app(config=ServerConfig(database_url="sqlite+aiosqlite:///:memory:"))
         with TestClient(app) as client:
-            response = client.post("/tasks", json={
-                "goal": "Test",
-                "pattern": "invalid",
-                "agents": [],
-            })
+            response = client.post(
+                "/tasks",
+                json={
+                    "goal": "Test",
+                    "pattern": "invalid",
+                    "agents": [],
+                },
+            )
             assert response.status_code == 422
 
     def test_get_task_events(self):
@@ -237,6 +243,7 @@ class TestTaskStore:
 class TestServerAuth:
     def test_rbac_viewer_cannot_submit_task(self):
         from edac.server.auth import Role
+
         cfg = ServerConfig(
             database_url="sqlite+aiosqlite:///:memory:",
             api_key="admin-key",
@@ -254,6 +261,7 @@ class TestServerAuth:
 
     def test_rbac_admin_can_submit_task(self):
         from edac.server.auth import Role
+
         cfg = ServerConfig(
             database_url="sqlite+aiosqlite:///:memory:",
             api_key="admin-key",

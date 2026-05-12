@@ -73,7 +73,9 @@ class TestToolRegistryApproval:
         await bus.start()
         registry = ToolRegistry(bus=bus)
         mgr = ApprovalManager()
-        mgr.add_gate(ApprovalGate(trigger_on="tool.destructive", prompt="Danger", timeout_seconds=0.01))
+        mgr.add_gate(
+            ApprovalGate(trigger_on="tool.destructive", prompt="Danger", timeout_seconds=0.01)
+        )
         registry._approval_manager = mgr
         yield registry
         await bus.stop()
@@ -108,7 +110,9 @@ class TestToolRegistryApproval:
         assert result == 6
 
     @pytest.mark.asyncio
-    async def test_destructive_tool_allowed_after_approval(self, tool_registry_with_approval) -> None:
+    async def test_destructive_tool_allowed_after_approval(
+        self, tool_registry_with_approval
+    ) -> None:
         registry = tool_registry_with_approval
 
         async def handler(x: int) -> int:

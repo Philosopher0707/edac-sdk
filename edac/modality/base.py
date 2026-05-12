@@ -12,6 +12,7 @@ from edac.event.schema import ModalityType
 @dataclass
 class ModalityContent:
     """Content that can be any modality."""
+
     modality: ModalityType
     data: Any
     metadata: Dict[str, Any]
@@ -23,17 +24,13 @@ class ModalityAdapter(ABC):
 
     @property
     @abstractmethod
-    def modality(self) -> ModalityType:
-        ...
+    def modality(self) -> ModalityType: ...
 
     @abstractmethod
-    def validate(self, content: ModalityContent) -> bool:
-        ...
+    def validate(self, content: ModalityContent) -> bool: ...
 
     @abstractmethod
-    def encode(self, raw: Any) -> ModalityContent:
-        ...
+    def encode(self, raw: Any) -> ModalityContent: ...
 
     @abstractmethod
-    def decode(self, content: ModalityContent) -> Any:
-        ...
+    def decode(self, content: ModalityContent) -> Any: ...

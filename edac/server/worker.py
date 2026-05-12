@@ -22,6 +22,7 @@ logger = logging.getLogger("edac.server.worker")
 @dataclass
 class QueuedTask:
     """A task waiting to be processed."""
+
     task_id: str
     goal: str
     pattern: str

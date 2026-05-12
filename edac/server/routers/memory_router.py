@@ -24,6 +24,7 @@ def _get_ctx(request: Request) -> ContextManager:
 
 # ── Stats ──
 
+
 @router.get("/memory/stats")
 async def memory_stats(request: Request) -> Dict[str, Any]:
     """Snapshot of all memory tiers."""
@@ -32,10 +33,13 @@ async def memory_stats(request: Request) -> Dict[str, Any]:
 
 # ── Short-Term Memory ──
 
+
 @router.get("/memory/agents/{agent_id}/short-term")
 async def get_short_term(agent_id: str, request: Request) -> Dict[str, Any]:
     window = _get_ctx(request).get_window(agent_id)
-    entries = [{"role": e.role, "content": e.content, "tokens": e.tokens} for e in window.get_window()]
+    entries = [
+        {"role": e.role, "content": e.content, "tokens": e.tokens} for e in window.get_window()
+    ]
     return {
         "agent_id": agent_id,
         "entries": entries,
@@ -59,6 +63,7 @@ async def clear_short_term(agent_id: str, request: Request) -> Dict[str, Any]:
 
 
 # ── Working Memory ──
+
 
 @router.get("/memory/working/{agent_id}")
 async def list_working(agent_id: str, request: Request) -> List[Dict[str, Any]]:
@@ -97,6 +102,7 @@ async def clear_working(agent_id: str, request: Request) -> Dict[str, Any]:
 
 # ── Long-Term Memory ──
 
+
 @router.get("/memory/long-term")
 async def list_long_term(request: Request, query: Optional[str] = None) -> List[Dict[str, Any]]:
     ltm = _get_ctx(request).get_long_term()
@@ -104,7 +110,10 @@ async def list_long_term(request: Request, query: Optional[str] = None) -> List[
         results = ltm.search_text(query)
     else:
         results = list(ltm._entries.values())
-    return [{"id": e.id, "content": e.content, "source": e.source, "metadata": e.metadata} for e in results]
+    return [
+        {"id": e.id, "content": e.content, "source": e.source, "metadata": e.metadata}
+        for e in results
+    ]
 
 
 @router.post("/memory/long-term")
@@ -124,6 +133,7 @@ async def delete_long_term(entry_id: str, request: Request) -> Dict[str, Any]:
 
 
 # ── Episodic Memory ──
+
 
 @router.get("/memory/episodic/{correlation_id}")
 async def get_episodic_trajectory(correlation_id: str, request: Request) -> List[Dict[str, Any]]:

@@ -23,6 +23,7 @@ logger = logging.getLogger("edac.server.store")
 @dataclass
 class TaskRecord:
     """A persisted task."""
+
     id: str
     status: str = "pending"
     goal: str = ""
@@ -123,9 +124,7 @@ class TaskStore:
         )
 
     async def get_task(self, task_id: str) -> Optional[TaskRecord]:
-        async with self._db.execute(
-            "SELECT * FROM tasks WHERE id = ?", (task_id,)
-        ) as cursor:
+        async with self._db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)) as cursor:
             row = await cursor.fetchone()
             if row is None:
                 return None
@@ -383,7 +382,13 @@ class PostgresTaskStore:
                 INSERT INTO tasks (id, status, goal, pattern, agents, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 """,
-                task_id, "pending", goal, pattern, agents_json, now, now,
+                task_id,
+                "pending",
+                goal,
+                pattern,
+                agents_json,
+                now,
+                now,
             )
         return TaskRecord(
             id=task_id,
@@ -397,9 +402,7 @@ class PostgresTaskStore:
 
     async def get_task(self, task_id: str) -> Optional[TaskRecord]:
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM tasks WHERE id = $1", task_id
-            )
+            row = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1", task_id)
             if row is None:
                 return None
             return self._pg_row_to_task(row)
@@ -419,7 +422,11 @@ class PostgresTaskStore:
                 UPDATE tasks SET status = $1, result = $2, error = $3, updated_at = $4
                 WHERE id = $5
                 """,
-                status, result_json, error, now, task_id,
+                status,
+                result_json,
+                error,
+                now,
+                task_id,
             )
 
     async def list_tasks(
@@ -435,14 +442,17 @@ class PostgresTaskStore:
                     SELECT * FROM tasks WHERE status = $1
                     ORDER BY created_at DESC LIMIT $2 OFFSET $3
                     """,
-                    status, limit, offset,
+                    status,
+                    limit,
+                    offset,
                 )
             else:
                 rows = await conn.fetch(
                     """
                     SELECT * FROM tasks ORDER BY created_at DESC LIMIT $1 OFFSET $2
                     """,
-                    limit, offset,
+                    limit,
+                    offset,
                 )
             return [self._pg_row_to_task(row) for row in rows]
 
@@ -450,9 +460,7 @@ class PostgresTaskStore:
         """Return total number of tasks, optionally filtered by status."""
         async with self._pool.acquire() as conn:
             if status:
-                row = await conn.fetchrow(
-                    "SELECT COUNT(*) FROM tasks WHERE status = $1", status
-                )
+                row = await conn.fetchrow("SELECT COUNT(*) FROM tasks WHERE status = $1", status)
             else:
                 row = await conn.fetchrow("SELECT COUNT(*) FROM tasks")
             return row["count"] if row else 0
@@ -465,7 +473,10 @@ class PostgresTaskStore:
                 INSERT INTO events (task_id, event_type, payload, timestamp)
                 VALUES ($1, $2, $3, $4)
                 """,
-                task_id, event_type, json.dumps(payload), now,
+                task_id,
+                event_type,
+                json.dumps(payload),
+                now,
             )
 
     async def get_events(self, task_id: str) -> List[Dict[str, Any]]:
@@ -491,9 +502,7 @@ class PostgresTaskStore:
                 "UPDATE tasks SET retry_count = retry_count + 1 WHERE id = $1",
                 task_id,
             )
-            row = await conn.fetchrow(
-                "SELECT retry_count FROM tasks WHERE id = $1", task_id
-            )
+            row = await conn.fetchrow("SELECT retry_count FROM tasks WHERE id = $1", task_id)
             return row["retry_count"] if row else 0
 
     async def move_to_dlq(self, task_id: str, max_retries: int = 3) -> bool:
@@ -540,7 +549,8 @@ class PostgresTaskStore:
                 """
                 SELECT * FROM dead_letter ORDER BY failed_at DESC LIMIT $1 OFFSET $2
                 """,
-                limit, offset,
+                limit,
+                offset,
             )
             return [
                 {

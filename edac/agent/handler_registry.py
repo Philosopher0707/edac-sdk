@@ -42,9 +42,7 @@ class HandlerRegistry:
     # Construction
     # ------------------------------------------------------------------
     def __init__(self) -> None:
-        self._handlers: Dict[
-            str, Callable[["AgentInstance"], Coroutine[Any, Any, None]]
-        ] = {}
+        self._handlers: Dict[str, Callable[["AgentInstance"], Coroutine[Any, Any, None]]] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -64,15 +62,11 @@ class HandlerRegistry:
         with self._lock:
             existing = self._handlers.get(name)
             if existing is not None and existing is not factory:
-                raise ValueError(
-                    f"Handler for agent name '{name}' is already registered"
-                )
+                raise ValueError(f"Handler for agent name '{name}' is already registered")
             self._handlers[name] = factory
             logger.debug("Registered handler for agent '%s'", name)
 
-    def get(
-        self, name: str
-    ) -> Optional[Callable[["AgentInstance"], Coroutine[Any, Any, None]]]:
+    def get(self, name: str) -> Optional[Callable[["AgentInstance"], Coroutine[Any, Any, None]]]:
         """Return the registered factory for *name*, or ``None``."""
         with self._lock:
             return self._handlers.get(name)

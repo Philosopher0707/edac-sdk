@@ -18,6 +18,7 @@ logger = logging.getLogger("edac.memory.long_term")
 @dataclass
 class MemoryEntry:
     """A single long-term memory entry."""
+
     id: str
     content: str
     embedding: Optional[List[float]] = None
@@ -31,7 +32,13 @@ class LongTermMemory:
     def __init__(self) -> None:
         self._entries: Dict[str, MemoryEntry] = {}
 
-    def store(self, content: str, embedding: Optional[List[float]] = None, metadata: Optional[Dict[str, Any]] = None, source: str = "unknown") -> str:
+    def store(
+        self,
+        content: str,
+        embedding: Optional[List[float]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        source: str = "unknown",
+    ) -> str:
         entry_id = hashlib.sha256(content.encode()).hexdigest()[:16]
         self._entries[entry_id] = MemoryEntry(
             id=entry_id,

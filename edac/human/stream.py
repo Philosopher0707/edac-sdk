@@ -52,11 +52,13 @@ class SSEStream:
 
     async def __aiter__(self) -> AsyncIterator[str]:
         async for event in self.stream:
-            data = json.dumps({
-                "event_type": event.event_type.value,
-                "source": event.source,
-                "topic": event.topic,
-                "payload": event.payload,
-                "timestamp": event.timestamp.isoformat(),
-            })
+            data = json.dumps(
+                {
+                    "event_type": event.event_type.value,
+                    "source": event.source,
+                    "topic": event.topic,
+                    "payload": event.payload,
+                    "timestamp": event.timestamp.isoformat(),
+                }
+            )
             yield f"data: {data}\n\n"

@@ -56,6 +56,7 @@ def load_user_agents(agents_dir: str = "agents") -> List[str]:
 
     if loaded:
         from edac.agent.handler_registry import HandlerRegistry
+
         reg = HandlerRegistry.get_default()
         names = reg.list()
         logger.info("HandlerRegistry now has %d agents: %s", len(names), names)

@@ -26,9 +26,11 @@ logger = logging.getLogger("edac.tool.registry")
 # Tool Descriptor
 # ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ToolSpec:
     """Metadata describing a tool's interface."""
+
     name: str
     description: str
     parameters: Dict[str, Any] = field(default_factory=dict)  # JSON Schema-ish
@@ -42,6 +44,7 @@ class ToolSpec:
 @dataclass
 class ToolRecord:
     """A registered tool with its spec and handler."""
+
     spec: ToolSpec
     handler: Callable[..., Coroutine[Any, Any, Any]]
     source: str = "builtin"  # "builtin", "mcp", "skill"
@@ -51,6 +54,7 @@ class ToolRecord:
 # ──────────────────────────────────────────────────────────────
 # Tool Registry
 # ──────────────────────────────────────────────────────────────
+
 
 class ToolRegistry:
     """Central registry for tools with discovery and execution."""
@@ -102,7 +106,8 @@ class ToolRegistry:
     def search(self, query: str) -> List[ToolSpec]:
         q = query.lower()
         return [
-            r.spec for r in self._tools.values()
+            r.spec
+            for r in self._tools.values()
             if q in r.spec.name.lower() or q in r.spec.description.lower()
         ]
 
@@ -130,7 +135,7 @@ class ToolRegistry:
         try:
             # Approval gate check for destructive tools
             if record.spec.destructive:
-                mgr = getattr(self, '_approval_manager', None)
+                mgr = getattr(self, "_approval_manager", None)
                 if mgr is not None:
                     gate = mgr.check(f"tool.{name}")
                     if gate is not None:
@@ -157,6 +162,7 @@ class ToolRegistry:
 
             if record.spec.sandbox_required:
                 from edac.security.sandbox import SecureSandbox
+
                 sandbox = SecureSandbox()
                 result = await sandbox.run(record.handler, resolved)
             else:
@@ -215,7 +221,7 @@ class ToolRegistry:
         }
         self._execution_log.append(entry)
         if len(self._execution_log) > self._max_log_size:
-            self._execution_log = self._execution_log[self._max_log_size // 2:]
+            self._execution_log = self._execution_log[self._max_log_size // 2 :]
 
     async def _emit_tool_event(
         self,
@@ -237,7 +243,10 @@ class ToolRegistry:
             source=f"tool:{tool_name}",
             topic="tool.events",
             payload=payload,
-            priority=EventPriority.HIGH if event_type in (EventType.TOOL_ERROR, EventType.TOOL_TIMEOUT, EventType.HUMAN_APPROVAL) else EventPriority.NORMAL,
+            priority=EventPriority.HIGH
+            if event_type
+            in (EventType.TOOL_ERROR, EventType.TOOL_TIMEOUT, EventType.HUMAN_APPROVAL)
+            else EventPriority.NORMAL,
         )
         await self.bus.emit(event)
 
@@ -255,6 +264,7 @@ class ToolRegistry:
 # ──────────────────────────────────────────────────────────────
 # Exceptions
 # ──────────────────────────────────────────────────────────────
+
 
 class ToolError(Exception):
     pass

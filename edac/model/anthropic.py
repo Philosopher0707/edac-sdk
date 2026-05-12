@@ -51,7 +51,9 @@ class AnthropicProvider(ModelProvider):
             self._session = aiohttp.ClientSession(headers=headers)
         return self._session
 
-    def _convert_messages(self, messages: List[ChatMessage]) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+    def _convert_messages(
+        self, messages: List[ChatMessage]
+    ) -> Tuple[Optional[str], List[Dict[str, Any]]]:
         """Extract system message, convert rest to Anthropic format."""
         system: Optional[str] = None
         converted: List[Dict[str, Any]] = []
@@ -59,10 +61,12 @@ class AnthropicProvider(ModelProvider):
             if m.role == "system":
                 system = m.content
             elif m.role == "tool":
-                converted.append({
-                    "role": "user",
-                    "content": [{"type": "tool_result", "content": m.content}],
-                })
+                converted.append(
+                    {
+                        "role": "user",
+                        "content": [{"type": "tool_result", "content": m.content}],
+                    }
+                )
             else:
                 converted.append({"role": m.role, "content": m.content})
         return system, converted

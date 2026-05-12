@@ -30,6 +30,7 @@ class StepStatus(str, Enum):
 @dataclass
 class Step:
     """A single step in a plan DAG."""
+
     id: str
     description: str
     action: str  # e.g. "tool.call", "agent.spawn", "human.approval"
@@ -139,7 +140,8 @@ class PlanDAG:
         """Steps whose dependencies are all completed."""
         completed = {s.id for s in self._steps.values() if s.status == StepStatus.COMPLETED}
         return [
-            s for s in self._steps.values()
+            s
+            for s in self._steps.values()
             if s.status == StepStatus.PENDING and all(d in completed for d in s.dependencies)
         ]
 
@@ -210,7 +212,9 @@ class PlanDAG:
 
     @property
     def is_complete(self) -> bool:
-        return all(s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in self._steps.values())
+        return all(
+            s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in self._steps.values()
+        )
 
     @property
     def has_failures(self) -> bool:

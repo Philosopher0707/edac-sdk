@@ -18,6 +18,7 @@ logger = logging.getLogger("edac.protocol.a2a")
 
 class A2ATaskStatus(Enum):
     """A2A task lifecycle states."""
+
     SUBMITTED = "submitted"
     WORKING = "working"
     INPUT_REQUIRED = "input-required"
@@ -29,6 +30,7 @@ class A2ATaskStatus(Enum):
 @dataclass
 class A2AArtifact:
     """An artifact exchanged between agents (file, message, etc.)."""
+
     name: str
     parts: List[Dict[str, Any]] = field(default_factory=list)
     index: int = 0
@@ -57,9 +59,12 @@ class A2AArtifact:
     @classmethod
     def from_file(cls, name: str, mime_type: str, data: bytes, **metadata: Any) -> A2AArtifact:
         import base64
+
         return cls(
             name=name,
-            parts=[{"type": "file", "mimeType": mime_type, "bytes": base64.b64encode(data).decode()}],
+            parts=[
+                {"type": "file", "mimeType": mime_type, "bytes": base64.b64encode(data).decode()}
+            ],
             metadata=metadata,
         )
 
@@ -67,6 +72,7 @@ class A2AArtifact:
 @dataclass
 class A2AMessage:
     """A message in an A2A task."""
+
     role: str  # "user" or "agent"
     parts: List[Dict[str, Any]] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -86,6 +92,7 @@ class A2AMessage:
 @dataclass
 class A2ATask:
     """A2A task representation with full lifecycle."""
+
     id: str
     status: A2ATaskStatus = field(default_factory=lambda: A2ATaskStatus.SUBMITTED)
     messages: List[A2AMessage] = field(default_factory=list)
@@ -132,10 +139,7 @@ class A2ABridge:
                 "streaming": True,
                 "pushNotifications": False,
             },
-            "skills": [
-                {"name": s, "description": f"Skill: {s}"}
-                for s in agent_card.skills
-            ],
+            "skills": [{"name": s, "description": f"Skill: {s}"} for s in agent_card.skills],
             "defaultInputModes": agent_card.input_modes,
             "defaultOutputModes": agent_card.output_modes,
             "endpoint": agent_card.endpoint or "/a2a",

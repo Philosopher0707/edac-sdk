@@ -39,11 +39,14 @@ class ReplanningTrigger(str, Enum):
 @dataclass
 class PlanConfig:
     """Configuration for plan execution."""
+
     max_parallel: int = 3
     max_replans: int = 5
-    replan_triggers: Set[ReplanningTrigger] = field(default_factory=lambda: {
-        ReplanningTrigger.STEP_FAILURE,
-    })
+    replan_triggers: Set[ReplanningTrigger] = field(
+        default_factory=lambda: {
+            ReplanningTrigger.STEP_FAILURE,
+        }
+    )
     confidence_threshold: float = 0.7
     approval_gates: List[str] = field(default_factory=list)
     timeout_per_step: Optional[float] = 60.0
@@ -112,7 +115,7 @@ class PlanEngine:
                 continue
 
             # Limit parallelism
-            steps = steps[:self.config.max_parallel]
+            steps = steps[: self.config.max_parallel]
 
             await self._emit_plan_event(plan, EventType.PLAN_STEP_START, steps=steps)
 
@@ -125,10 +128,14 @@ class PlanEngine:
             for step, result in zip(steps, results):
                 if isinstance(result, Exception):
                     mutator.set_step_failed(step.id, str(result))
-                    await self._emit_step_event(plan, step, EventType.PLAN_STEP_FAIL, error=str(result))
+                    await self._emit_step_event(
+                        plan, step, EventType.PLAN_STEP_FAIL, error=str(result)
+                    )
                 else:
                     mutator.set_step_result(step.id, result)
-                    await self._emit_step_event(plan, step, EventType.PLAN_STEP_COMPLETE, result=result)
+                    await self._emit_step_event(
+                        plan, step, EventType.PLAN_STEP_COMPLETE, result=result
+                    )
 
         await self._emit_plan_event(plan, EventType.PLAN_COMPLETE)
         return plan
@@ -140,7 +147,9 @@ class PlanEngine:
     ) -> Any:
         """Execute a single step with timeout and status tracking."""
         await self._emit_step_event(
-            None, step, EventType.PLAN_STEP_START,
+            None,
+            step,
+            EventType.PLAN_STEP_START,
         )
         step.status = StepStatus.IN_PROGRESS
 
@@ -196,7 +205,9 @@ class PlanEngine:
         if self._replan_count >= self.config.max_replans:
             for step in plan.list_steps():
                 if step.status == StepStatus.FAILED:
-                    logger.error(f"Step {step.id} failed permanently after {self._replan_count} replans")
+                    logger.error(
+                        f"Step {step.id} failed permanently after {self._replan_count} replans"
+                    )
 
     async def _llm_replan(
         self,
@@ -210,8 +221,7 @@ class PlanEngine:
             return
 
         steps_desc = "\n".join(
-            f"- {s.id}: {s.description} (error: {s.error or 'unknown'})"
-            for s in failed_steps
+            f"- {s.id}: {s.description} (error: {s.error or 'unknown'})" for s in failed_steps
         )
         prompt = (
             f"You are a planning engine. The following plan steps failed:\n{steps_desc}\n\n"
@@ -288,7 +298,9 @@ class PlanEngine:
             source="system:plan_engine",
             topic="plan.events",
             payload=payload,
-            priority=EventPriority.HIGH if event_type in (EventType.PLAN_REPLAN, EventType.PLAN_COMPLETE) else EventPriority.NORMAL,
+            priority=EventPriority.HIGH
+            if event_type in (EventType.PLAN_REPLAN, EventType.PLAN_COMPLETE)
+            else EventPriority.NORMAL,
         )
         await self.bus.emit(event)
 
@@ -315,6 +327,8 @@ class PlanEngine:
             source="system:plan_engine",
             topic=f"plan.step.{step.id}",
             payload=payload,
-            priority=EventPriority.HIGH if event_type in (EventType.PLAN_STEP_FAIL, EventType.PLAN_REPLAN) else EventPriority.NORMAL,
+            priority=EventPriority.HIGH
+            if event_type in (EventType.PLAN_STEP_FAIL, EventType.PLAN_REPLAN)
+            else EventPriority.NORMAL,
         )
         await self.bus.emit(event)

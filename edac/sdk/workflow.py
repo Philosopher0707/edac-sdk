@@ -104,9 +104,7 @@ class WorkflowRunner:
         # If the engine aborted because of failures, surface that
         if executed.has_failures:
             failed = [s for s in executed.list_steps() if s.status == StepStatus.FAILED]
-            raise RuntimeError(
-                f"Workflow failed: {[f'{s.id} ({s.error})' for s in failed]}"
-            )
+            raise RuntimeError(f"Workflow failed: {[f'{s.id} ({s.error})' for s in failed]}")
 
         return self.results
 

@@ -85,7 +85,9 @@ class EdacClientSync:
     def create_agent(self, request: CreateAgentRequest) -> AgentInfo:
         return self._run(self._async_client.create_agent(request))
 
-    def list_agents(self, *, limit: Optional[int] = None, offset: Optional[int] = None) -> PaginatedList[AgentInfo]:
+    def list_agents(
+        self, *, limit: Optional[int] = None, offset: Optional[int] = None
+    ) -> PaginatedList[AgentInfo]:
         return self._run(self._async_client.list_agents(limit=limit, offset=offset))
 
     def get_agent(self, agent_id: str) -> AgentInfo:
@@ -107,7 +109,9 @@ class EdacClientSync:
 
     # ── Batch operations ──
 
-    def create_agents_batch(self, requests: List[CreateAgentRequest]) -> List[Union[AgentInfo, BatchError]]:
+    def create_agents_batch(
+        self, requests: List[CreateAgentRequest]
+    ) -> List[Union[AgentInfo, BatchError]]:
         return self._run(self._async_client.create_agents_batch(requests))
 
     def delete_agents_batch(self, agent_ids: List[str]) -> List[Dict[str, str]]:
@@ -142,9 +146,7 @@ class EdacClientSync:
         Convenience wrapper that delegates to the async implementation.
         """
         return self._run(
-            self._async_client.wait_for_task(
-                task_id, poll_interval=poll_interval, timeout=timeout
-            )
+            self._async_client.wait_for_task(task_id, poll_interval=poll_interval, timeout=timeout)
         )
 
     def cancel_task(self, task_id: str) -> TaskResponse:
@@ -153,7 +155,9 @@ class EdacClientSync:
     def get_task_events(self, task_id: str) -> List[Dict[str, Any]]:
         return self._run(self._async_client.get_task_events(task_id))
 
-    def submit_tasks_batch(self, requests: List[SubmitTaskRequest]) -> List[Union[TaskResponse, BatchError]]:
+    def submit_tasks_batch(
+        self, requests: List[SubmitTaskRequest]
+    ) -> List[Union[TaskResponse, BatchError]]:
         return self._run(self._async_client.submit_tasks_batch(requests))
 
     # ── System ──

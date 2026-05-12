@@ -134,7 +134,11 @@ async def _standalone_loop(
             # Build messages from window
             messages: list[ChatMessage] = []
             for entry in ctx.get_window("standalone").get_window():
-                role = entry.role if entry.role in ("system", "user", "assistant", "tool") else "assistant"
+                role = (
+                    entry.role
+                    if entry.role in ("system", "user", "assistant", "tool")
+                    else "assistant"
+                )
                 messages.append(ChatMessage(role=role, content=entry.content))
             messages.append(ChatMessage(role="user", content=text))
 

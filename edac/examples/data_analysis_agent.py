@@ -39,6 +39,7 @@ logger = logging.getLogger("edac.examples.data_analysis")
 
 # ── Custom Data Analysis Tools ──
 
+
 async def analyze_csv(filepath: str) -> Dict[str, Any]:
     """Mock CSV analysis returning summary statistics."""
     # In production this would read a real CSV with pandas
@@ -223,7 +224,9 @@ async def main():
 
             # Process the CSV into a ModalityContent
             content = modality.process(csv_sample, filename="sales.csv", mime_type="text/csv")
-            logger.info(f"Processed content: modality={content.modality.value}, valid={modality.validate(content)}")
+            logger.info(
+                f"Processed content: modality={content.modality.value}, valid={modality.validate(content)}"
+            )
 
             # ── Tool Execution Demo ──
             # Directly invoke our custom tools (separate from the swarm)

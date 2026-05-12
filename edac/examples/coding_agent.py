@@ -41,6 +41,7 @@ logger = logging.getLogger("edac.examples.coding")
 
 # ── Custom Tools ──────────────────────────────────────────────
 
+
 async def lint_tool(code: str, **kwargs: Any) -> str:
     """Simulated linter — checks for type hints and docstrings."""
     issues = []
@@ -71,13 +72,13 @@ async def refactor_tool(code: str, instructions: str = "", **kwargs: Any) -> str
 
 # ── Setup ─────────────────────────────────────────────────────
 
-SOURCE_CODE = '''
+SOURCE_CODE = """
 def greet(name):
     return f"Hello, {name}!"
 
 def add(a, b):
     return a + b
-'''
+"""
 
 
 def setup_tools() -> ToolRegistry:
@@ -157,6 +158,7 @@ def setup_mock_llm() -> Any:
 
 
 # ── Main ──────────────────────────────────────────────────────
+
 
 async def main() -> None:
     # Observability

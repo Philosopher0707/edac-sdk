@@ -16,9 +16,13 @@ from edac.tool.sandbox import Sandbox, SandboxConfig, SandboxPool
 class TestToolRegistry:
     def test_register_and_get(self):
         reg = ToolRegistry()
-        spec = ToolSpec(name="echo", description="echoes input", parameters={"msg": {"type": "string"}})
+        spec = ToolSpec(
+            name="echo", description="echoes input", parameters={"msg": {"type": "string"}}
+        )
+
         async def handler(msg):
             return msg
+
         reg.register(spec, handler)
         assert reg.has("echo")
         assert reg.get("echo").spec.name == "echo"
@@ -34,8 +38,10 @@ class TestToolRegistry:
     @pytest.mark.asyncio
     async def test_execute_success(self):
         reg = ToolRegistry()
+
         async def double(x):
             return x * 2
+
         reg.register(ToolSpec(name="double", description="d"), double)
         result = await reg.execute("double", {"x": 3})
         assert result == 6
@@ -50,8 +56,10 @@ class TestToolRegistry:
     async def test_execute_timeout(self):
         reg = ToolRegistry()
         spec = ToolSpec(name="slow", description="d", timeout_seconds=0.05)
+
         async def handler():
             await asyncio.sleep(1)
+
         reg.register(spec, handler)
         with pytest.raises(ToolTimeout):
             await reg.execute("slow", {})

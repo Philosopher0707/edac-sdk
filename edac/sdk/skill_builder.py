@@ -64,13 +64,22 @@ class SkillBuilder:
     def build(self) -> Skill:
         body_parts = []
         if self._principles:
-            body_parts.append("## Principles\n" + "\n".join(f"{i+1}. {p}" for i, p in enumerate(self._principles)))
+            body_parts.append(
+                "## Principles\n"
+                + "\n".join(f"{i + 1}. {p}" for i, p in enumerate(self._principles))
+            )
         if self._tools:
             body_parts.append("## Tools Available\n" + "\n".join(f"- `{t}`" for t in self._tools))
         if self._verification:
-            body_parts.append("## Verification Steps\n" + "\n".join(f"{i+1}. {v}" for i, v in enumerate(self._verification)))
+            body_parts.append(
+                "## Verification Steps\n"
+                + "\n".join(f"{i + 1}. {v}" for i, v in enumerate(self._verification))
+            )
         if self._failure_recovery:
-            body_parts.append("## Failure Recovery\n" + "\n".join(f"{i+1}. {r}" for i, r in enumerate(self._failure_recovery)))
+            body_parts.append(
+                "## Failure Recovery\n"
+                + "\n".join(f"{i + 1}. {r}" for i, r in enumerate(self._failure_recovery))
+            )
 
         body = "\n\n".join(body_parts)
         metadata = {

@@ -33,6 +33,7 @@ from .vector_clock import VectorClock
 # Core State Enums (referenced by __init__)
 # ──────────────────────────────────────────────────────────────
 
+
 class EventStatus(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -97,8 +98,10 @@ class SessionState(str, Enum):
 # Event Type Taxonomy
 # ──────────────────────────────────────────────────────────────
 
+
 class EventCategory(str, Enum):
     """High-level event categories."""
+
     AGENT = "agent"
     PLAN = "plan"
     TOOL = "tool"
@@ -110,9 +113,10 @@ class EventCategory(str, Enum):
 
 class EventType(str, Enum):
     """All event types in the system.
-    
+
     Naming convention: {category}.{action}[.{subaction}]
     """
+
     # Agent lifecycle
     AGENT_SPAWN = "agent.spawn"
     AGENT_HEARTBEAT = "agent.heartbeat"
@@ -121,7 +125,7 @@ class EventType(str, Enum):
     AGENT_TERMINATE = "agent.terminate"
     AGENT_CRASH = "agent.crash"
     AGENT_STATE_CHANGE = "agent.state_change"
-    
+
     # Plan lifecycle
     PLAN_CREATE = "plan.create"
     PLAN_UPDATE = "plan.update"
@@ -133,7 +137,7 @@ class EventType(str, Enum):
     PLAN_STEP_FAIL = "plan.step.fail"
     PLAN_STEP_SKIP = "plan.step.skip"
     PLAN_STEP_RETRY = "plan.step.retry"
-    
+
     # Tool interactions
     TOOL_CALL = "tool.call"
     TOOL_RESULT = "tool.result"
@@ -141,14 +145,14 @@ class EventType(str, Enum):
     TOOL_TIMEOUT = "tool.timeout"
     TOOL_DISCOVER = "tool.discover"
     TOOL_REGISTER = "tool.register"
-    
+
     # Human interactions
     HUMAN_INPUT_REQUIRED = "human.input_required"
     HUMAN_APPROVAL = "human.approval"
     HUMAN_FEEDBACK = "human.feedback"
     HUMAN_OVERRIDE = "human.override"
     HUMAN_MESSAGE = "human.message"
-    
+
     # Modality content
     MODALITY_TEXT = "modality.text"
     MODALITY_CODE = "modality.code"
@@ -157,14 +161,14 @@ class EventType(str, Enum):
     MODALITY_VIDEO = "modality.video"
     MODALITY_ARTIFACT = "modality.artifact"
     MODALITY_EMBEDDING = "modality.embedding"
-    
+
     # System events
     SYSTEM_ERROR = "system.error"
     SYSTEM_METRIC = "system.metric"
     SYSTEM_LOG = "system.log"
     SYSTEM_CONFIG_CHANGE = "system.config_change"
     SYSTEM_SHUTDOWN = "system.shutdown"
-    
+
     # Protocol events
     PROTOCOL_A2A_TASK = "protocol.a2a.task"
     PROTOCOL_A2A_ARTIFACT = "protocol.a2a.artifact"
@@ -178,29 +182,32 @@ class EventType(str, Enum):
 # Priority System
 # ──────────────────────────────────────────────────────────────
 
+
 class EventPriority(int, Enum):
     """Event priority levels.
-    
+
     Lower numbers = higher priority (processed first).
     """
-    CRITICAL = -100   # System failure, agent crash
-    HIGH = -50        # Human waiting, deadline approaching
-    NORMAL = 0        # Standard processing
-    LOW = 50          # Background tasks, cleanup
-    BATCH = 100       # Bulk operations, analytics
+
+    CRITICAL = -100  # System failure, agent crash
+    HIGH = -50  # Human waiting, deadline approaching
+    NORMAL = 0  # Standard processing
+    LOW = 50  # Background tasks, cleanup
+    BATCH = 100  # Bulk operations, analytics
 
 
 # ──────────────────────────────────────────────────────────────
 # Core Event Model
 # ──────────────────────────────────────────────────────────────
 
+
 class Event(BaseModel):
     """The universal event — everything in EDAC is an Event.
-    
+
     Events are immutable once created. To "modify" an event,
     emit a new event with the original as parent.
     """
-    
+
     model_config = ConfigDict(
         frozen=True,  # Immutable events
         extra="allow",  # Allow extension for custom fields
@@ -219,7 +226,7 @@ class Event(BaseModel):
             ]
         },
     )
-    
+
     # ── Identity ──
     event_id: uuid.UUID = Field(
         default_factory=uuid.uuid4,
@@ -228,7 +235,7 @@ class Event(BaseModel):
     event_type: EventType = Field(
         description="The type of event (determines payload schema)",
     )
-    
+
     # ── Causality (Distributed Tracing) ──
     correlation_id: uuid.UUID = Field(
         description="Groups all events in a single task/session",
@@ -240,21 +247,21 @@ class Event(BaseModel):
     causality_vector: Dict[str, int] = Field(
         default_factory=dict,
         description="Vector clock for distributed event ordering. "
-                    "Keys are agent IDs, values are logical timestamps.",
+        "Keys are agent IDs, values are logical timestamps.",
     )
-    
+
     # ── Source ──
     source: str = Field(
         description="Event emitter identifier. Format: '{type}:{name}'",
         examples=["agent:planner-1", "tool:github-mcp", "human:alice", "system:monitor"],
     )
-    
+
     # ── Payload (Modality-Agnostic) ──
     payload: Dict[str, Any] = Field(
         default_factory=dict,
         description="Event-type-specific data. Schema varies by event_type.",
     )
-    
+
     # ── Metadata ──
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
@@ -268,7 +275,7 @@ class Event(BaseModel):
         default=None,
         description="Time-to-live. Event can be dropped after this many seconds.",
     )
-    
+
     # ── Routing ──
     topic: str = Field(
         description="Pub/sub topic for routing. Hierarchical: 'category.subcategory.name'",
@@ -278,18 +285,19 @@ class Event(BaseModel):
         default=None,
         description="Specific recipient agent IDs. None = broadcast to topic subscribers.",
     )
-    
+
     # ── Context Snapshot ──
     context: Dict[str, Any] = Field(
         default_factory=dict,
         description="Snapshot of relevant state at event creation time. "
-                    "Includes token usage, agent state, plan progress, etc.",
+        "Includes token usage, agent state, plan progress, etc.",
     )
-    
+
     # ── Vector Clock Helpers ──
     def get_vector_clock(self) -> "VectorClock":
         """Return the causality vector as a VectorClock instance."""
         from edac.event.vector_clock import VectorClock
+
         return VectorClock.from_dict(self.causality_vector)
 
     def happens_before(self, other: "Event") -> bool:
@@ -307,22 +315,22 @@ class Event(BaseModel):
         if ":" not in v:
             raise ValueError("Source must be in format 'type:name' (e.g., 'agent:planner-1')")
         return v
-    
+
     # ── Methods ──
     def get_category(self) -> EventCategory:
         """Extract category from event type."""
         category_str = self.event_type.value.split(".")[0]
         return EventCategory(category_str)
-    
+
     def is_agent_event(self) -> bool:
         return self.get_category() == EventCategory.AGENT
-    
+
     def is_plan_event(self) -> bool:
         return self.get_category() == EventCategory.PLAN
-    
+
     def is_human_event(self) -> bool:
         return self.get_category() == EventCategory.HUMAN
-    
+
     def is_system_critical(self) -> bool:
         return self.priority == EventPriority.CRITICAL
 
@@ -351,7 +359,7 @@ class Event(BaseModel):
         now = now or datetime.now(timezone.utc)
         elapsed = (now - self.timestamp).total_seconds()
         return elapsed > self.ttl_seconds
-    
+
     def derive(
         self,
         event_type: EventType,
@@ -359,14 +367,14 @@ class Event(BaseModel):
         **kwargs: Any,
     ) -> Event:
         """Create a child event with this event as parent.
-        
+
         Preserves correlation_id, increments causality vector.
         """
         # Increment causality vector for source
         source_type, source_name = self.source.split(":", 1)
         new_vector = dict(self.causality_vector)
         new_vector[source_name] = new_vector.get(source_name, 0) + 1
-        
+
         return Event(
             event_type=event_type,
             correlation_id=self.correlation_id,
@@ -378,7 +386,7 @@ class Event(BaseModel):
             priority=kwargs.get("priority", self.priority),
             **{k: v for k, v in kwargs.items() if k not in {"source", "topic", "priority"}},
         )
-    
+
     def __repr__(self) -> str:
         return (
             f"Event({self.event_type.value} "
@@ -392,8 +400,10 @@ class Event(BaseModel):
 # Typed Payload Schemas (for common event types)
 # ──────────────────────────────────────────────────────────────
 
+
 class AgentSpawnPayload(BaseModel):
     """Payload for agent.spawn events."""
+
     agent_name: str
     agent_type: str
     goal: Optional[str] = None
@@ -406,6 +416,7 @@ class AgentSpawnPayload(BaseModel):
 
 class PlanStepPayload(BaseModel):
     """Payload for plan step events."""
+
     plan_id: uuid.UUID
     step_id: str
     step_index: int
@@ -418,6 +429,7 @@ class PlanStepPayload(BaseModel):
 
 class ToolCallPayload(BaseModel):
     """Payload for tool.call events."""
+
     tool_name: str
     tool_type: Literal["mcp", "skill", "builtin", "sandbox"]
     arguments: Dict[str, Any] = Field(default_factory=dict)
@@ -427,6 +439,7 @@ class ToolCallPayload(BaseModel):
 
 class ToolResultPayload(BaseModel):
     """Payload for tool.result events."""
+
     tool_name: str
     success: bool
     result: Any = None
@@ -437,6 +450,7 @@ class ToolResultPayload(BaseModel):
 
 class HumanInputPayload(BaseModel):
     """Payload for human.input_required events."""
+
     prompt: str
     input_type: Literal["text", "approval", "choice", "file"]
     options: Optional[List[str]] = None
@@ -446,6 +460,7 @@ class HumanInputPayload(BaseModel):
 
 class ModalityPayload(BaseModel):
     """Base for all modality events."""
+
     content_type: str  # MIME type
     encoding: Literal["raw", "base64", "url", "embedding"]
     data: Union[str, bytes, List[float]]
@@ -455,6 +470,7 @@ class ModalityPayload(BaseModel):
 
 class SystemMetricPayload(BaseModel):
     """Payload for system.metric events."""
+
     metric_name: str
     metric_type: Literal["counter", "gauge", "histogram", "summary"]
     value: float
@@ -466,11 +482,12 @@ class SystemMetricPayload(BaseModel):
 # Event Filters (for subscriptions)
 # ──────────────────────────────────────────────────────────────
 
+
 class EventFilter(BaseModel):
     """Filter criteria for event subscriptions."""
-    
+
     model_config = ConfigDict(extra="allow")
-    
+
     event_types: Optional[Set[EventType]] = None
     categories: Optional[Set[EventCategory]] = None
     sources: Optional[Set[str]] = None
@@ -478,7 +495,7 @@ class EventFilter(BaseModel):
     min_priority: Optional[EventPriority] = None
     max_priority: Optional[EventPriority] = None
     correlation_ids: Optional[Set[uuid.UUID]] = None
-    
+
     def matches(self, event: Event) -> bool:
         """Check if an event matches this filter."""
         if self.event_types and event.event_type not in self.event_types:
@@ -503,7 +520,7 @@ class EventFilter(BaseModel):
         if self.correlation_ids and event.correlation_id not in self.correlation_ids:
             return False
         return True
-    
+
     @staticmethod
     def _topic_matches(topic: str, pattern: str) -> bool:
         """Support hierarchical wildcard matching."""
@@ -521,6 +538,7 @@ class EventFilter(BaseModel):
 # ──────────────────────────────────────────────────────────────
 # Convenience Functions
 # ──────────────────────────────────────────────────────────────
+
 
 def create_event(
     event_type: EventType,
@@ -563,8 +581,10 @@ def create_system_event(
 # Batch / Subscription helpers
 # ──────────────────────────────────────────────────────────────
 
+
 class EventBatch(BaseModel):
     """A batch of events for efficient transport."""
+
     model_config = ConfigDict(frozen=True)
     events: List[Event] = Field(default_factory=list)
     correlation_id: Optional[uuid.UUID] = None
@@ -572,6 +592,7 @@ class EventBatch(BaseModel):
 
 class EventSubscription(BaseModel):
     """A subscription descriptor."""
+
     model_config = ConfigDict(frozen=True)
     id: str
     topic_pattern: str

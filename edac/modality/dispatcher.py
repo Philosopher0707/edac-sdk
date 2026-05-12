@@ -107,7 +107,7 @@ class ModalityDispatcher:
 
         # 1. Filename extension is the strongest signal
         if filename:
-            ext = filename[filename.rfind("."):].lower() if "." in filename else ""
+            ext = filename[filename.rfind(".") :].lower() if "." in filename else ""
             if ext in _EXT_MAP:
                 return _EXT_MAP[ext]
             # Fallback to mimetypes
@@ -140,9 +140,22 @@ class ModalityDispatcher:
     def _looks_like_code(data: str) -> bool:
         """Heuristic: check for common code patterns."""
         code_patterns = [
-            "def ", "class ", "import ", "from ", "function ",
-            "const ", "let ", "var ", "=>", "#include", "package ",
-            "public ", "private ", "func ", "struct ", "impl ",
+            "def ",
+            "class ",
+            "import ",
+            "from ",
+            "function ",
+            "const ",
+            "let ",
+            "var ",
+            "=>",
+            "#include",
+            "package ",
+            "public ",
+            "private ",
+            "func ",
+            "struct ",
+            "impl ",
         ]
         return any(p in data for p in code_patterns)
 
@@ -193,7 +206,9 @@ class ModalityDispatcher:
         if modality == ModalityType.VIDEO:
             return adapter.encode(data, fmt=self._video_fmt_from_filename(filename))
         if modality == ModalityType.ARTIFACT:
-            mime = kwargs.get("mime_type", mimetypes.guess_type(filename or "")[0] or "application/octet-stream")
+            mime = kwargs.get(
+                "mime_type", mimetypes.guess_type(filename or "")[0] or "application/octet-stream"
+            )
             return adapter.encode(data, mime_type=mime)
 
         # TEXT fallback
@@ -204,33 +219,43 @@ class ModalityDispatcher:
         if not filename:
             return "python"
         ext_map = {
-            ".py": "python", ".js": "javascript", ".ts": "typescript",
-            ".go": "go", ".rs": "rust", ".java": "java",
-            ".c": "c", ".cpp": "cpp", ".h": "c", ".sh": "bash",
-            ".rb": "ruby", ".php": "php", ".swift": "swift", ".kt": "kotlin",
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".go": "go",
+            ".rs": "rust",
+            ".java": "java",
+            ".c": "c",
+            ".cpp": "cpp",
+            ".h": "c",
+            ".sh": "bash",
+            ".rb": "ruby",
+            ".php": "php",
+            ".swift": "swift",
+            ".kt": "kotlin",
         }
-        ext = filename[filename.rfind("."):].lower() if "." in filename else ""
+        ext = filename[filename.rfind(".") :].lower() if "." in filename else ""
         return ext_map.get(ext, "python")
 
     @staticmethod
     def _image_fmt_from_filename(filename: Optional[str]) -> str:
         if not filename:
             return "png"
-        ext = filename[filename.rfind("."):].lower() if "." in filename else ""
+        ext = filename[filename.rfind(".") :].lower() if "." in filename else ""
         return ext.lstrip(".") or "png"
 
     @staticmethod
     def _audio_fmt_from_filename(filename: Optional[str]) -> str:
         if not filename:
             return "wav"
-        ext = filename[filename.rfind("."):].lower() if "." in filename else ""
+        ext = filename[filename.rfind(".") :].lower() if "." in filename else ""
         return ext.lstrip(".") or "wav"
 
     @staticmethod
     def _video_fmt_from_filename(filename: Optional[str]) -> str:
         if not filename:
             return "mp4"
-        ext = filename[filename.rfind("."):].lower() if "." in filename else ""
+        ext = filename[filename.rfind(".") :].lower() if "." in filename else ""
         return ext.lstrip(".") or "mp4"
 
     # ── Validation ──

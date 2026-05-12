@@ -127,10 +127,12 @@ class MCPClient:
                 description=tool.description or "",
                 parameters=tool.inputSchema or {},
             )
+
             # Register a handler that proxies to the MCP server
             async def _make_handler(n: str = connection_name, t: str = tool.name):
                 async def _handler(**kwargs) -> Any:
                     return await self.call_tool(n, t, kwargs)
+
                 return _handler
 
             self.registry.register(spec, await _make_handler(), source="mcp")

@@ -12,8 +12,8 @@ logger = logging.getLogger("edac.server.circuit_breaker")
 
 
 class State(Enum):
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, reject fast
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject fast
     HALF_OPEN = "half_open"  # Testing recovery
 
 
@@ -59,8 +59,7 @@ class CircuitBreaker:
                     logger.info(f"Circuit {self.name} half-open")
                 else:
                     raise CircuitBreakerOpenError(
-                        f"Circuit {self.name} is OPEN — last failure at "
-                        f"{self._last_failure_time}"
+                        f"Circuit {self.name} is OPEN — last failure at {self._last_failure_time}"
                     )
 
         try:
@@ -101,4 +100,5 @@ class CircuitBreaker:
 
 class CircuitBreakerOpenError(Exception):
     """Circuit breaker is open — fast fail."""
+
     pass

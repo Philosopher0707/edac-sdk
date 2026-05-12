@@ -60,7 +60,11 @@ class TestContextCompressor:
         comp = ContextCompressor(target_tokens=30)
         result = comp.compress(mem)
         summary = next(
-            (e for e in result.get_window() if e.content.startswith("[Earlier context summarized]")),
+            (
+                e
+                for e in result.get_window()
+                if e.content.startswith("[Earlier context summarized]")
+            ),
             None,
         )
         assert summary is not None
@@ -74,11 +78,19 @@ class TestContextCompressor:
         """Summary should include extracted topics from content."""
         mem = ShortTermMemory(max_tokens=100)
         for _ in range(5):
-            mem.add(WindowEntry(role="assistant", content="calculating physics and astronomy", tokens=10))
+            mem.add(
+                WindowEntry(
+                    role="assistant", content="calculating physics and astronomy", tokens=10
+                )
+            )
         comp = ContextCompressor(target_tokens=30)
         result = comp.compress(mem)
         summary = next(
-            (e for e in result.get_window() if e.content.startswith("[Earlier context summarized]")),
+            (
+                e
+                for e in result.get_window()
+                if e.content.startswith("[Earlier context summarized]")
+            ),
             None,
         )
         assert summary is not None
@@ -92,14 +104,18 @@ class TestContextCompressor:
         for i in range(8):
             mem.add(WindowEntry(role="assistant", content=f"first batch {i}", tokens=10))
         # Simulate existing summary (as would happen after a prior compression)
-        mem.add(WindowEntry(role="system", content="[Earlier context summarized] 3 assistant", tokens=5))
+        mem.add(
+            WindowEntry(role="system", content="[Earlier context summarized] 3 assistant", tokens=5)
+        )
         # Second batch
         for i in range(8):
             mem.add(WindowEntry(role="assistant", content=f"second batch {i}", tokens=10))
         comp = ContextCompressor(target_tokens=30)
         result = comp.compress(mem)
         # Should only have one system summary, not two
-        summaries = [e for e in result.get_window() if e.content.startswith("[Earlier context summarized]")]
+        summaries = [
+            e for e in result.get_window() if e.content.startswith("[Earlier context summarized]")
+        ]
         assert len(summaries) == 1
         content = summaries[0].content
         # Should have merged counts from old summary (3) + first batch (8)
@@ -133,19 +149,28 @@ class TestContextCompressor:
 
         # First compression
         mem = comp.compress(mem)
-        assert sum(1 for e in mem.get_window() if e.content.startswith("[Earlier context summarized]")) == 1
+        assert (
+            sum(1 for e in mem.get_window() if e.content.startswith("[Earlier context summarized]"))
+            == 1
+        )
 
         # Add more and compress again
         for i in range(10):
             mem.add(WindowEntry(role="assistant", content=f"second batch {i}", tokens=10))
         mem = comp.compress(mem)
-        assert sum(1 for e in mem.get_window() if e.content.startswith("[Earlier context summarized]")) == 1
+        assert (
+            sum(1 for e in mem.get_window() if e.content.startswith("[Earlier context summarized]"))
+            == 1
+        )
 
         # Third round
         for i in range(10):
             mem.add(WindowEntry(role="assistant", content=f"third batch {i}", tokens=10))
         mem = comp.compress(mem)
-        assert sum(1 for e in mem.get_window() if e.content.startswith("[Earlier context summarized]")) == 1
+        assert (
+            sum(1 for e in mem.get_window() if e.content.startswith("[Earlier context summarized]"))
+            == 1
+        )
 
     def test_compression_respects_target_tokens_strictly(self):
         """After compression, total tokens must always be <= target_tokens."""
@@ -259,10 +284,12 @@ class TestContextManager:
 
     def test_compression_triggered_when_window_over_budget(self):
         """When adding to window causes it to exceed budget, compression runs."""
-        cm = ContextManager(config=ContextConfig(
-            max_tokens_per_agent=1000,
-            compression_trigger_tokens=50,
-        ))
+        cm = ContextManager(
+            config=ContextConfig(
+                max_tokens_per_agent=1000,
+                compression_trigger_tokens=50,
+            )
+        )
         # Fill the window with non-system entries to trigger compression
         for i in range(20):
             cm.add_to_window("a1", "assistant", f"entry {i}", tokens=10)
@@ -285,10 +312,12 @@ class TestContextManager:
 
     def test_system_prompts_preserved_under_compression(self):
         """System and human entries survive compression."""
-        cm = ContextManager(config=ContextConfig(
-            max_tokens_per_agent=1000,
-            compression_trigger_tokens=50,
-        ))
+        cm = ContextManager(
+            config=ContextConfig(
+                max_tokens_per_agent=1000,
+                compression_trigger_tokens=50,
+            )
+        )
         cm.add_to_window("a1", "system", "You are helpful", tokens=5)
         for i in range(20):
             cm.add_to_window("a1", "assistant", f"entry {i}", tokens=10)

@@ -34,6 +34,7 @@ logger = logging.getLogger("edac.swarm")
 @dataclass
 class SwarmResult:
     """Result of a swarm execution."""
+
     success: bool
     artifacts: List[Dict[str, Any]] = field(default_factory=list)
     events: List[Event] = field(default_factory=list)
@@ -153,10 +154,7 @@ class Swarm:
                 self._results[cfg["name"]] = {"agent": cfg["name"], "status": "done"}
 
         return SwarmResult(
-            success=not any(
-                isinstance(r, dict) and r.get("error")
-                for r in self._results.values()
-            ),
+            success=not any(isinstance(r, dict) and r.get("error") for r in self._results.values()),
             artifacts=[{"agent": k, "output": v} for k, v in self._results.items()],
             plan=executed_plan,
             agent_results=self._results,
@@ -202,7 +200,9 @@ class Swarm:
         workers = [a for a in self.agents if a.get("role") != "orchestrator"]
 
         if orchestrator is None:
-            raise ValueError("orchestrator-workers pattern requires an agent with role='orchestrator'")
+            raise ValueError(
+                "orchestrator-workers pattern requires an agent with role='orchestrator'"
+            )
 
         # Spawn orchestrator
         orch_config = AgentConfig(
@@ -242,7 +242,9 @@ class Swarm:
                 return worker_name, result
 
         if subtasks:
-            results = await asyncio.gather(*[_run_subtask(st) for st in subtasks], return_exceptions=True)
+            results = await asyncio.gather(
+                *[_run_subtask(st) for st in subtasks], return_exceptions=True
+            )
             for subtask, result in zip(subtasks, results):
                 if isinstance(result, Exception):
                     self._results[subtask.get("id", "unknown")] = {"error": str(result)}
@@ -250,7 +252,9 @@ class Swarm:
                     self._results[subtask.get("id", result[0])] = result[1]
         else:
             # No subtasks — workers execute directly on goal
-            coros = [self._invoke_agent(name, aid, {"goal": goal}) for name, aid in worker_map.items()]
+            coros = [
+                self._invoke_agent(name, aid, {"goal": goal}) for name, aid in worker_map.items()
+            ]
             results = await asyncio.gather(*coros, return_exceptions=True)
             for cfg, result in zip(workers, results):
                 if isinstance(result, Exception):
@@ -273,11 +277,18 @@ class Swarm:
                 span.set_attribute("agent_name", name)
                 span.set_attribute("agent_id", agent_id)
                 span.set_attribute("context_keys", list(context.keys()))
-                logger.debug(f"Invoking agent {name} ({agent_id}) with context keys: {list(context.keys())}")
+                logger.debug(
+                    f"Invoking agent {name} ({agent_id}) with context keys: {list(context.keys())}"
+                )
                 result = await self._do_invoke_agent(name, agent_id, context)
-                span.set_attribute("status", result.get("status", "unknown") if isinstance(result, dict) else "done")
+                span.set_attribute(
+                    "status",
+                    result.get("status", "unknown") if isinstance(result, dict) else "done",
+                )
                 return result
-        logger.debug(f"Invoking agent {name} ({agent_id}) with context keys: {list(context.keys())}")
+        logger.debug(
+            f"Invoking agent {name} ({agent_id}) with context keys: {list(context.keys())}"
+        )
         return await self._do_invoke_agent(name, agent_id, context)
 
     async def _do_invoke_agent(self, name: str, agent_id: str, context: Dict[str, Any]) -> Any:

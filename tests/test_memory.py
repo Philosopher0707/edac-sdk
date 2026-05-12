@@ -86,7 +86,9 @@ class TestEpisodicMemory:
     def test_append_and_trajectory(self):
         mem = EpisodicMemory()
         cid = uuid4()
-        e = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
+        e = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
         mem.append(e)
         traj = mem.get_trajectory(cid)
         assert len(traj) == 1
@@ -94,8 +96,12 @@ class TestEpisodicMemory:
     def test_replay_order(self):
         mem = EpisodicMemory()
         cid = uuid4()
-        e1 = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
-        e2 = create_event(EventType.AGENT_HEARTBEAT, "agent:a", "agent.health", correlation_id=cid, payload={})
+        e1 = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
+        e2 = create_event(
+            EventType.AGENT_HEARTBEAT, "agent:a", "agent.health", correlation_id=cid, payload={}
+        )
         mem.append(e1)
         mem.append(e2)
         replayed = mem.replay(cid)
@@ -105,7 +111,9 @@ class TestEpisodicMemory:
     def test_export(self, tmp_path):
         mem = EpisodicMemory()
         cid = uuid4()
-        e = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
+        e = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
         mem.append(e)
         out = tmp_path / "export.jsonl"
         mem.export(cid, out)
@@ -116,7 +124,9 @@ class TestEpisodicMemory:
     def test_persistence(self, tmp_path):
         path = tmp_path / "events.jsonl"
         cid = uuid4()
-        e = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
+        e = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
 
         mem1 = EpisodicMemory(path)
         mem1.append(e)

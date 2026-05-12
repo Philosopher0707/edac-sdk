@@ -33,7 +33,7 @@ class RuntimeContext:
     # Core (always present)
     bus: EventBus
     runtime: AgentRuntime
-    registry: ModelRegistry          # LLM model registry
+    registry: ModelRegistry  # LLM model registry
     ctx: ContextManager
     executor: AgentExecutor
     worker: TaskWorker

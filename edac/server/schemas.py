@@ -16,7 +16,9 @@ class SubmitTaskRequest(BaseModel):
     pattern: str = Field(default="pipeline", pattern="^(pipeline|mesh|orchestrator-workers)$")
     agents: List[Dict[str, Any]] = Field(default_factory=list)
     max_parallel: int = Field(default=3, ge=1, le=20)
-    webhook_url: Optional[str] = Field(default=None, description="URL to POST task result when completed/failed")
+    webhook_url: Optional[str] = Field(
+        default=None, description="URL to POST task result when completed/failed"
+    )
 
 
 class WebhookConfig(BaseModel):

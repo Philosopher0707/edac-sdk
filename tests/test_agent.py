@@ -43,6 +43,7 @@ class TestAgentLifecycle:
         cfg = AgentConfig(name="tester", heartbeat_timeout=0.01)
         agent = AgentInstance(cfg)
         import time
+
         time.sleep(0.02)
         assert not agent.is_healthy()
 

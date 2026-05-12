@@ -177,7 +177,9 @@ class TestPlanEngine:
     @pytest.mark.asyncio
     async def test_execute_with_failure_and_replan(self):
         bus = EventBus()
-        engine = PlanEngine(bus, PlanConfig(max_replans=1, replan_triggers={ReplanningTrigger.STEP_FAILURE}))
+        engine = PlanEngine(
+            bus, PlanConfig(max_replans=1, replan_triggers={ReplanningTrigger.STEP_FAILURE})
+        )
 
         plan = PlanDAG(goal="test")
         plan.add_step(Step(id="s1", description="bad step", action="a"))
@@ -219,6 +221,7 @@ class TestPlanEngine:
             raise ValueError("boom")
 
         events = []
+
         async def capture(event):
             events.append(event.event_type.value)
 

@@ -76,12 +76,16 @@ class TestModalityDispatcher:
 
     def test_validate_good(self):
         dispatcher = ModalityDispatcher()
-        content = ModalityContent(modality=ModalityType.TEXT, data="hello", metadata={}, mime_type="text/plain")
+        content = ModalityContent(
+            modality=ModalityType.TEXT, data="hello", metadata={}, mime_type="text/plain"
+        )
         assert dispatcher.validate(content)
 
     def test_validate_bad(self):
         dispatcher = ModalityDispatcher()
-        content = ModalityContent(modality=ModalityType.TEXT, data=12345, metadata={}, mime_type="text/plain")
+        content = ModalityContent(
+            modality=ModalityType.TEXT, data=12345, metadata={}, mime_type="text/plain"
+        )
         assert not dispatcher.validate(content)
 
     def test_supported_modality_types(self):
@@ -159,22 +163,28 @@ class TestModalityEndpoints:
         assert data["mime_type"] == "image/png"
 
     def test_validate_good(self, client):
-        r = client.post("/modality/validate", json={
-            "modality": "text",
-            "data": "hello",
-            "metadata": {},
-            "mime_type": "text/plain",
-        })
+        r = client.post(
+            "/modality/validate",
+            json={
+                "modality": "text",
+                "data": "hello",
+                "metadata": {},
+                "mime_type": "text/plain",
+            },
+        )
         assert r.status_code == 200
         assert r.json()["valid"] is True
 
     def test_validate_bad(self, client):
-        r = client.post("/modality/validate", json={
-            "modality": "text",
-            "data": 12345,
-            "metadata": {},
-            "mime_type": "text/plain",
-        })
+        r = client.post(
+            "/modality/validate",
+            json={
+                "modality": "text",
+                "data": 12345,
+                "metadata": {},
+                "mime_type": "text/plain",
+            },
+        )
         assert r.status_code == 200
         assert r.json()["valid"] is False
 

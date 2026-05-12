@@ -50,11 +50,15 @@ class TestCodingAgentExample:
             lint_tool,
         )
         tools.register(
-            ToolSpec(name="refactor", description="Refactor", returns={"result": {"type": "string"}}),
+            ToolSpec(
+                name="refactor", description="Refactor", returns={"result": {"type": "string"}}
+            ),
             refactor_tool,
         )
         tools.register(
-            ToolSpec(name="test", description="Test runner", returns={"result": {"type": "string"}}),
+            ToolSpec(
+                name="test", description="Test runner", returns={"result": {"type": "string"}}
+            ),
             test_tool,
         )
 
@@ -80,7 +84,9 @@ class TestCodingAgentExample:
                     if step.id == "lint":
                         return await tools.execute("lint", {"code": "x = 1"})
                     if step.id == "refactor":
-                        return await tools.execute("refactor", {"code": "x = 1", "instructions": "refactor"})
+                        return await tools.execute(
+                            "refactor", {"code": "x = 1", "instructions": "refactor"}
+                        )
                     if step.id == "test":
                         return await tools.execute("test", {"test_code": "x = 1"})
                     return "done"

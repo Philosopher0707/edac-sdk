@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # FastAPI application lifespan manually.
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def server_app():
     """Create a fresh FastAPI app with full lifespan for async tests."""

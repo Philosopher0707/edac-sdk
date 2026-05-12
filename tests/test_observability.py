@@ -164,7 +164,7 @@ class TestMetricsCollector:
         h.observe(250)
         assert h.sum_value == 450
         # buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
-        assert h.counts[1] == 1   # 50 <= 50
+        assert h.counts[1] == 1  # 50 <= 50
         assert h.counts[3] == 2  # 150 & 250 <= 250
         assert sum(h.counts) == 3
 
@@ -196,7 +196,9 @@ class TestTrajectoryExporter:
     def test_summary(self, tmp_path):
         mem = EpisodicMemory()
         cid = uuid4()
-        e = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
+        e = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
         mem.append(e)
         exporter = TrajectoryExporter(mem)
         summary = exporter.summary(cid)
@@ -206,7 +208,9 @@ class TestTrajectoryExporter:
     def test_export_jsonl(self, tmp_path):
         mem = EpisodicMemory()
         cid = uuid4()
-        e = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
+        e = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
         mem.append(e)
         exporter = TrajectoryExporter(mem)
         out = tmp_path / "traj.jsonl"
@@ -218,7 +222,9 @@ class TestTrajectoryExporter:
     def test_export_json(self, tmp_path):
         mem = EpisodicMemory()
         cid = uuid4()
-        e = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
+        e = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
         mem.append(e)
         exporter = TrajectoryExporter(mem)
         out = tmp_path / "traj.json"

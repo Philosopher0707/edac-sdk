@@ -40,4 +40,4 @@ class WorkingMemory:
 
     def _trim(self) -> None:
         if len(self.entries) > self.max_entries:
-            self.entries = self.entries[-self.max_entries:]
+            self.entries = self.entries[-self.max_entries :]

@@ -39,7 +39,16 @@ from edac.server.config import ServerConfig
 from edac.server.context import RuntimeContext
 from edac.server.executor import AgentExecutor
 from edac.server.rate_limiter import RateLimiter
-from edac.server.routers import agents_router, approval_router, chat_router, memory_router, modality_router, protocol_router, system_router, tasks_router
+from edac.server.routers import (
+    agents_router,
+    approval_router,
+    chat_router,
+    memory_router,
+    modality_router,
+    protocol_router,
+    system_router,
+    tasks_router,
+)
 from edac.server.store import create_store
 from edac.server.tracing import clear_request_id, get_request_id, set_request_id
 from edac.observability.tracing import Tracer
@@ -74,6 +83,7 @@ async def lifespan(app: FastAPI):
 
     # Approval gates (HITL)
     from edac.human.approval import ApprovalManager, ApprovalGate
+
     approval_manager = ApprovalManager()
     # Seed a default gate for destructive actions
     approval_manager.add_gate(
@@ -84,7 +94,11 @@ async def lifespan(app: FastAPI):
     )
 
     # Circuit breakers per provider
-    cb_ollama = CircuitBreaker("ollama", failure_threshold=cfg.circuit_breaker_threshold, recovery_timeout=cfg.circuit_breaker_recovery)
+    cb_ollama = CircuitBreaker(
+        "ollama",
+        failure_threshold=cfg.circuit_breaker_threshold,
+        recovery_timeout=cfg.circuit_breaker_recovery,
+    )
     app.state.cb_ollama = cb_ollama
 
     anthropic = None
@@ -94,7 +108,11 @@ async def lifespan(app: FastAPI):
             default_model=cfg.anthropic_default_model,
         )
         registry.register("anthropic", anthropic)
-        app.state.cb_anthropic = CircuitBreaker("anthropic", failure_threshold=cfg.circuit_breaker_threshold, recovery_timeout=cfg.circuit_breaker_recovery)
+        app.state.cb_anthropic = CircuitBreaker(
+            "anthropic",
+            failure_threshold=cfg.circuit_breaker_threshold,
+            recovery_timeout=cfg.circuit_breaker_recovery,
+        )
 
     openai = None
     if cfg.openai_api_key:
@@ -104,7 +122,11 @@ async def lifespan(app: FastAPI):
             base_url=cfg.openai_base_url,
         )
         registry.register("openai", openai)
-        app.state.cb_openai = CircuitBreaker("openai", failure_threshold=cfg.circuit_breaker_threshold, recovery_timeout=cfg.circuit_breaker_recovery)
+        app.state.cb_openai = CircuitBreaker(
+            "openai",
+            failure_threshold=cfg.circuit_breaker_threshold,
+            recovery_timeout=cfg.circuit_breaker_recovery,
+        )
 
     # Context manager
     ctx = ContextManager(registry=registry)
@@ -122,6 +144,7 @@ async def lifespan(app: FastAPI):
 
     # Modality dispatcher
     from edac.modality.dispatcher import ModalityDispatcher
+
     modality_dispatcher = ModalityDispatcher()
 
     # Protocol bridges
@@ -174,6 +197,7 @@ async def lifespan(app: FastAPI):
 
     # Webhook infrastructure
     from edac.server.webhook import TaskWebhookRegistry, WebhookDispatcher
+
     webhook_registry = TaskWebhookRegistry()
     webhook_dispatcher = WebhookDispatcher()
 
@@ -187,11 +211,13 @@ async def lifespan(app: FastAPI):
 
     # Register built-in chat tools so the chat agent can interact with EDAC
     from edac.server.chat_tools import register_chat_tools
+
     registered = register_chat_tools(tool_registry)
     logger.info("Registered %d chat tools", registered)
 
     # Auto-load user-defined agents from agents/ directory
     from edac.server.user_agents import load_user_agents
+
     loaded = load_user_agents()
     logger.info("Loaded %d user agent modules", len(loaded))
 
@@ -218,7 +244,7 @@ async def lifespan(app: FastAPI):
         approval_manager=approval_manager,
         modality_dispatcher=modality_dispatcher,
         chat_store=chat_store,
-)
+    )
 
     app.state.bus = bus
     app.state.runtime = runtime
@@ -298,7 +324,10 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             elapsed = time.monotonic() - start
             mc = app.state.metrics
-            mc.histogram("http_request_duration_ms", labels={"method": request.method, "route": request.url.path}).observe(elapsed * 1000)
+            mc.histogram(
+                "http_request_duration_ms",
+                labels={"method": request.method, "route": request.url.path},
+            ).observe(elapsed * 1000)
             if response is not None:
                 response.headers["x-request-id"] = get_request_id() or ""
             clear_request_id()
@@ -309,7 +338,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         rate_limiter = getattr(app.state, "rate_limiter", None)
         if rate_limiter is None:
             return await call_next(request)
-        client_id = request.headers.get("x-api-key", request.client.host if request.client else "anonymous")
+        client_id = request.headers.get(
+            "x-api-key", request.client.host if request.client else "anonymous"
+        )
         if not await rate_limiter.acquire(client_id):
             wait = await rate_limiter.wait_time(client_id)
             return JSONResponse(
@@ -324,6 +355,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
     # Auth middleware
     if cfg.api_key:
+
         @app.middleware("http")
         async def auth_middleware(request: Request, call_next):
             # Skip auth for health endpoint

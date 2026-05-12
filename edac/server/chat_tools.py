@@ -114,30 +114,46 @@ async def edac_help(**kwargs: Any) -> Dict[str, Any]:
 # ── Tool registry entries ──────────────────────────────────────────
 
 CHAT_TOOLS = [
-    {"name": "edac_health", "handler": edac_health,
-     "description": "Check EDAC server health and status",
-     "parameters": {}},
-    {"name": "edac_list_agents", "handler": edac_list_agents,
-     "description": "List all registered agent handlers",
-     "parameters": {}},
-    {"name": "edac_submit_task", "handler": edac_submit_task,
-     "description": "Submit a task to EDAC",
-     "parameters": {
-         "goal": {"type": "string", "description": "Task goal/description"},
-         "pattern": {"type": "string", "description": "pipeline, mesh, or orchestrator-workers"},
-     }},
-    {"name": "edac_get_version", "handler": edac_get_version,
-     "description": "Get EDAC version and build info",
-     "parameters": {}},
-    {"name": "edac_help", "handler": edac_help,
-     "description": "Get help about EDAC commands and SDK usage",
-     "parameters": {}},
+    {
+        "name": "edac_health",
+        "handler": edac_health,
+        "description": "Check EDAC server health and status",
+        "parameters": {},
+    },
+    {
+        "name": "edac_list_agents",
+        "handler": edac_list_agents,
+        "description": "List all registered agent handlers",
+        "parameters": {},
+    },
+    {
+        "name": "edac_submit_task",
+        "handler": edac_submit_task,
+        "description": "Submit a task to EDAC",
+        "parameters": {
+            "goal": {"type": "string", "description": "Task goal/description"},
+            "pattern": {"type": "string", "description": "pipeline, mesh, or orchestrator-workers"},
+        },
+    },
+    {
+        "name": "edac_get_version",
+        "handler": edac_get_version,
+        "description": "Get EDAC version and build info",
+        "parameters": {},
+    },
+    {
+        "name": "edac_help",
+        "handler": edac_help,
+        "description": "Get help about EDAC commands and SDK usage",
+        "parameters": {},
+    },
 ]
 
 
 def register_chat_tools(tool_registry: Any) -> int:
     """Register all chat tools into a ToolRegistry. Returns count."""
     from edac.tool.registry import ToolSpec
+
     count = 0
     for entry in CHAT_TOOLS:
         try:

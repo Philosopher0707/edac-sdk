@@ -28,8 +28,17 @@ class TestEventSchema:
 
     def test_event_correlation(self):
         cid = uuid4()
-        e1 = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={})
-        e2 = create_event(EventType.AGENT_HEARTBEAT, "agent:a", "agent.health", correlation_id=cid, parent_event_id=e1.event_id, payload={})
+        e1 = create_event(
+            EventType.AGENT_SPAWN, "agent:a", "agent.spawn", correlation_id=cid, payload={}
+        )
+        e2 = create_event(
+            EventType.AGENT_HEARTBEAT,
+            "agent:a",
+            "agent.health",
+            correlation_id=cid,
+            parent_event_id=e1.event_id,
+            payload={},
+        )
         assert e2.parent_event_id == e1.event_id
         assert e2.correlation_id == cid
 
@@ -117,8 +126,20 @@ class TestEventBus:
         bus = EventBus(max_queue_depth=1)
         async with bus:
             # Fill queue
-            e1 = create_event(EventType.SYSTEM_LOG, "system:s", "system.log", payload={}, priority=EventPriority.NORMAL)
-            e2 = create_event(EventType.SYSTEM_LOG, "system:s", "system.log", payload={}, priority=EventPriority.NORMAL)
+            e1 = create_event(
+                EventType.SYSTEM_LOG,
+                "system:s",
+                "system.log",
+                payload={},
+                priority=EventPriority.NORMAL,
+            )
+            e2 = create_event(
+                EventType.SYSTEM_LOG,
+                "system:s",
+                "system.log",
+                payload={},
+                priority=EventPriority.NORMAL,
+            )
             await bus.emit(e1)
             # Second event should be dropped under backpressure
             result = await bus.emit(e2)
@@ -130,13 +151,21 @@ class TestEventBus:
         async with bus:
             # Slow handler so queue backs up
             handler_done = asyncio.Event()
+
             async def slow_handler(event):
                 await handler_done.wait()
                 return None
+
             bus.subscribe(slow_handler, topics=["test"])
 
             events = [
-                create_event(EventType.SYSTEM_LOG, "system:s", "test", payload={}, priority=EventPriority.NORMAL)
+                create_event(
+                    EventType.SYSTEM_LOG,
+                    "system:s",
+                    "test",
+                    payload={},
+                    priority=EventPriority.NORMAL,
+                )
                 for _ in range(20)
             ]
             results = await asyncio.gather(*[bus.emit(e) for e in events])
@@ -209,11 +238,15 @@ class TestEventBus:
         bus2 = EventBus()
 
         async with bus1:
-            await bus1.emit(create_event(EventType.AGENT_SPAWN, "agent:a", "agent.test", payload={}))
+            await bus1.emit(
+                create_event(EventType.AGENT_SPAWN, "agent:a", "agent.test", payload={})
+            )
             await asyncio.sleep(0.1)
 
         async with bus2:
-            await bus2.emit(create_event(EventType.AGENT_SPAWN, "agent:a", "agent.test", payload={}))
+            await bus2.emit(
+                create_event(EventType.AGENT_SPAWN, "agent:a", "agent.test", payload={})
+            )
             await asyncio.sleep(0.1)
 
         assert len(bus1.get_trace_spans()) == 1
@@ -227,7 +260,9 @@ class TestEventBus:
         cid = uuid4()
 
         async with bus:
-            e = create_event(EventType.AGENT_SPAWN, "agent:a", "agent.test", correlation_id=cid, payload={})
+            e = create_event(
+                EventType.AGENT_SPAWN, "agent:a", "agent.test", correlation_id=cid, payload={}
+            )
             await bus.emit(e)
             await asyncio.sleep(0.1)
 
@@ -308,8 +343,11 @@ class TestEventRouter:
     def test_routing_table(self):
         router = EventRouter()
 
-        async def h1(e): pass
-        async def h2(e): pass
+        async def h1(e):
+            pass
+
+        async def h2(e):
+            pass
 
         s1 = router.subscribe("a.b", h1)
         s2 = router.subscribe("a.*", h2)

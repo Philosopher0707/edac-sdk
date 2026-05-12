@@ -17,6 +17,7 @@ logger = logging.getLogger("edac.memory.short_term")
 @dataclass
 class WindowEntry:
     """A single entry in the context window."""
+
     role: str  # "system", "user", "assistant", "tool", "event"
     content: str
     tokens: int = 0

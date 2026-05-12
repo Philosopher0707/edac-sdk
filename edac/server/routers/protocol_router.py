@@ -21,7 +21,9 @@ async def a2a_discover(request: Request):
     app = request.app
     bridge: Optional[A2ABridge] = getattr(app.state, "a2a_bridge", None)
     if bridge is None:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="A2A bridge not enabled")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="A2A bridge not enabled"
+        )
     return PlainTextResponse(content=bridge.discover(), media_type="application/json")
 
 
@@ -31,10 +33,14 @@ async def a2a_agent_card(name: str, request: Request):
     app = request.app
     bridge: Optional[A2ABridge] = getattr(app.state, "a2a_bridge", None)
     if bridge is None:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="A2A bridge not enabled")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="A2A bridge not enabled"
+        )
     card = bridge.get_card(name)
     if card is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{name}' not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{name}' not found"
+        )
     return JSONResponse(content=card)
 
 
@@ -44,7 +50,9 @@ async def a2a_create_task(request: Request) -> JSONResponse:
     app = request.app
     bridge: Optional[A2ABridge] = getattr(app.state, "a2a_bridge", None)
     if bridge is None:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="A2A bridge not enabled")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="A2A bridge not enabled"
+        )
     try:
         body = await request.json()
     except Exception:
@@ -62,6 +70,7 @@ async def a2a_create_task(request: Request) -> JSONResponse:
     bus: Optional[Any] = getattr(app.state, "bus", None)
     if bus is not None:
         from edac.event.schema import EventType, EventPriority, create_event
+
         event = create_event(
             event_type=EventType.PLAN_CREATE,
             source="protocol:a2a",
@@ -82,7 +91,9 @@ async def sse_stream(request: Request, topics: Optional[str] = None):
     app = request.app
     bridge: Optional[SSEBridge] = getattr(app.state, "sse_bridge", None)
     if bridge is None:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="SSE bridge not enabled")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="SSE bridge not enabled"
+        )
 
     topic_list: Optional[List[str]] = topics.split(",") if topics else None
 
@@ -107,7 +118,9 @@ async def mcp_list_tools(request: Request) -> PlainTextResponse:
     app = request.app
     bridge: Optional[MCPBridge] = getattr(app.state, "mcp_bridge", None)
     if bridge is None:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="MCP bridge not enabled")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="MCP bridge not enabled"
+        )
     return PlainTextResponse(content=bridge.list_tools(), media_type="application/json")
 
 
@@ -117,7 +130,9 @@ async def mcp_call_tool(tool_name: str, request: Request) -> PlainTextResponse:
     app = request.app
     bridge: Optional[MCPBridge] = getattr(app.state, "mcp_bridge", None)
     if bridge is None:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="MCP bridge not enabled")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="MCP bridge not enabled"
+        )
     try:
         body = await request.json()
     except Exception:
@@ -134,4 +149,6 @@ async def list_tools(request: Request) -> List[Dict[str, Any]]:
     if tool_registry is None:
         return []
     tools = tool_registry.list_tools()
-    return [{"name": t.name, "description": t.description, "parameters": t.parameters} for t in tools]
+    return [
+        {"name": t.name, "description": t.description, "parameters": t.parameters} for t in tools
+    ]

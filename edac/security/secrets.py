@@ -19,6 +19,7 @@ logger = logging.getLogger("edac.security.secrets")
 @dataclass
 class Secret:
     """A scoped secret with metadata."""
+
     key: str
     value: str
     scope: str = "global"  # agent, task, global
@@ -40,7 +41,9 @@ class SecretsManager:
 
     # ── Core API ──
 
-    def set(self, key: str, value: str, scope: str = "global", budget: Optional[int] = None) -> None:
+    def set(
+        self, key: str, value: str, scope: str = "global", budget: Optional[int] = None
+    ) -> None:
         """Store a secret."""
         self._secrets[key] = Secret(
             key=key,
@@ -79,7 +82,9 @@ class SecretsManager:
 
     # ── Scoped helpers ──
 
-    def set_for_agent(self, agent_id: str, key: str, value: str, budget: Optional[int] = None) -> None:
+    def set_for_agent(
+        self, agent_id: str, key: str, value: str, budget: Optional[int] = None
+    ) -> None:
         """Store a secret scoped to an agent."""
         self.set(key, value, scope=f"agent:{agent_id}", budget=budget)
 
@@ -87,7 +92,9 @@ class SecretsManager:
         """Retrieve a secret scoped to an agent."""
         return self.get(key, scope=f"agent:{agent_id}")
 
-    def set_for_task(self, task_id: str, key: str, value: str, budget: Optional[int] = None) -> None:
+    def set_for_task(
+        self, task_id: str, key: str, value: str, budget: Optional[int] = None
+    ) -> None:
         """Store a secret scoped to a task."""
         self.set(key, value, scope=f"task:{task_id}", budget=budget)
 
@@ -100,7 +107,7 @@ class SecretsManager:
         count = 0
         for env_key, value in os.environ.items():
             if env_key.startswith(prefix):
-                key = env_key[len(prefix):]
+                key = env_key[len(prefix) :]
                 self.set(key, value, scope="env")
                 count += 1
         logger.info(f"Loaded {count} secrets from environment")

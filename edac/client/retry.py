@@ -23,12 +23,23 @@ try:
 except Exception:  # pragma: no cover
     _HAS_TENACITY = False
 
-from edac.client.exceptions import EdacAPIError, EdacAuthError, EdacClientError, EdacNotFoundError, EdacRetryExhausted
+from edac.client.exceptions import (
+    EdacAPIError,
+    EdacAuthError,
+    EdacClientError,
+    EdacNotFoundError,
+    EdacRetryExhausted,
+)
 
 logger = logging.getLogger("edac.client.retry")
 
 # Errors that should NEVER be retried
-_NO_RETRY_ERRORS: Tuple[Type[Exception], ...] = (EdacAuthError, EdacNotFoundError, ValueError, TypeError)
+_NO_RETRY_ERRORS: Tuple[Type[Exception], ...] = (
+    EdacAuthError,
+    EdacNotFoundError,
+    ValueError,
+    TypeError,
+)
 
 # Status codes that are considered transient and safe to retry
 _RETRY_STATUS_CODES: Tuple[int, ...] = (429, 500, 502, 503, 504)
@@ -89,7 +100,9 @@ def _wrap_with_custom_retry(
 ) -> Callable[[Callable[..., Coroutine[Any, Any, Any]]], Callable[..., Coroutine[Any, Any, Any]]]:
     """Build a decorator that retries an async function using *cfg*."""
 
-    def decorator(fn: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Coroutine[Any, Any, Any]]:
+    def decorator(
+        fn: Callable[..., Coroutine[Any, Any, Any]],
+    ) -> Callable[..., Coroutine[Any, Any, Any]]:
         @wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exc: Optional[BaseException] = None
@@ -100,7 +113,7 @@ def _wrap_with_custom_retry(
                     last_exc = exc
                     if attempt == cfg.max_retries or not _should_retry(exc, cfg):
                         raise
-                    wait = min(cfg.backoff_base * (2 ** attempt), cfg.backoff_max)
+                    wait = min(cfg.backoff_base * (2**attempt), cfg.backoff_max)
                     logger.debug(
                         "Retrying %s in %.2fs (attempt %d/%d): %s",
                         fn.__qualname__,

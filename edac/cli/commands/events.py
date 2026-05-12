@@ -28,7 +28,9 @@ def events(ctx: click.Context, base_url: str, api_key: Optional[str]) -> None:
 @click.option("--timeout", type=float, default=30.0, help="SSE read timeout")
 @click.option("--count", type=int, default=None, help="Stop after N events")
 @click.pass_context
-def follow_events(ctx: click.Context, topics: Optional[str], timeout: float, count: Optional[int]) -> None:
+def follow_events(
+    ctx: click.Context, topics: Optional[str], timeout: float, count: Optional[int]
+) -> None:
     """Follow the SSE event stream."""
     topic_list = topics.split(",") if topics else None
     client = EdacClientSync(ctx.obj["base_url"], api_key=ctx.obj.get("api_key"))

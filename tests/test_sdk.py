@@ -71,6 +71,7 @@ class TestSkillDecorator:
 
     def test_skill_requires_path_or_name(self):
         with pytest.raises(ValueError):
+
             @skill()
             async def my_agent(event):
                 return event
@@ -78,10 +79,12 @@ class TestSkillDecorator:
 
 class TestWorkflowDecorator:
     def test_decorator_attaches_workflow(self):
-        @workflow([
-            {"agent": "planner", "task": "plan"},
-            {"agent": "coder", "task": "code"},
-        ])
+        @workflow(
+            [
+                {"agent": "planner", "task": "plan"},
+                {"agent": "coder", "task": "code"},
+            ]
+        )
         async def my_pipeline(event):
             return event
 
@@ -144,12 +147,15 @@ class TestWorkflowRunner:
         planner = await runtime.spawn(AgentConfig(name="planner"))
         coder = await runtime.spawn(AgentConfig(name="coder"))
 
-        wf = Workflow([
-            {"agent": "planner", "task": "plan"},
-            {"agent": "coder", "task": "code"},
-        ])
+        wf = Workflow(
+            [
+                {"agent": "planner", "task": "plan"},
+                {"agent": "coder", "task": "code"},
+            ]
+        )
 
         from edac.sdk.workflow import WorkflowRunner
+
         runner = WorkflowRunner(runtime, wf)
         results = await runner.run()
 

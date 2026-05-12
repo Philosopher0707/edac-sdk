@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 @dataclass
 class Counter:
     """Monotonically increasing counter."""
+
     name: str
     value: float = 0.0
     labels: Dict[str, str] = field(default_factory=dict)
@@ -21,6 +22,7 @@ class Counter:
 @dataclass
 class Gauge:
     """Arbitrary value gauge."""
+
     name: str
     value: float = 0.0
     labels: Dict[str, str] = field(default_factory=dict)
@@ -32,8 +34,11 @@ class Gauge:
 @dataclass
 class Histogram:
     """Histogram with linear buckets."""
+
     name: str
-    buckets: List[float] = field(default_factory=lambda: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000])
+    buckets: List[float] = field(
+        default_factory=lambda: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+    )
     counts: List[int] = field(default_factory=list)
     sum_value: float = 0.0
     labels: Dict[str, str] = field(default_factory=dict)
@@ -70,10 +75,19 @@ class MetricsCollector:
             self._gauges[key] = Gauge(name=name, labels=labels or {})
         return self._gauges[key]
 
-    def histogram(self, name: str, labels: Optional[Dict[str, str]] = None, buckets: Optional[List[float]] = None) -> Histogram:
+    def histogram(
+        self,
+        name: str,
+        labels: Optional[Dict[str, str]] = None,
+        buckets: Optional[List[float]] = None,
+    ) -> Histogram:
         key = self._key(name, labels)
         if key not in self._histograms:
-            self._histograms[key] = Histogram(name=name, labels=labels or {}, buckets=buckets or [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000])
+            self._histograms[key] = Histogram(
+                name=name,
+                labels=labels or {},
+                buckets=buckets or [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+            )
         return self._histograms[key]
 
     def export(self) -> str:
@@ -93,7 +107,9 @@ class MetricsCollector:
         for h in self._histograms.values():
             labels = ",".join(f'{k}="{v}"' for k, v in h.labels.items())
             for bucket, count in zip(h.buckets, h.counts):
-                lines.append(f'{h.name}_bucket{{le="{bucket}"{("," + labels) if labels else ""}}} {count}')
+                lines.append(
+                    f'{h.name}_bucket{{le="{bucket}"{("," + labels) if labels else ""}}} {count}'
+                )
             suffix = f"{{{labels}}}" if labels else ""
             lines.append(f"{h.name}_sum{suffix} {h.sum_value}")
             lines.append(f"{h.name}_count{suffix} {sum(h.counts)}")

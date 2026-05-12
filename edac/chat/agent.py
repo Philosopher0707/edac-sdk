@@ -205,6 +205,7 @@ class ChatAgent:
 
 # ── Factory for @agent decorator ────────────────────────────────────────────
 
+
 async def chat_agent_factory(agent: AgentInstance) -> None:
     """Factory coroutine for AgentRuntime.spawn().
 

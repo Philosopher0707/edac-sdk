@@ -25,6 +25,7 @@ logger = logging.getLogger("edac.server.executor")
 
 class SecurityError(Exception):
     """Raised when a prompt fails guardrail screening."""
+
     pass
 
 
@@ -162,9 +163,7 @@ class AgentExecutor:
                     if isinstance(response, str):
                         span.set_attribute("response_length", len(response))
             else:
-                response = await self._do_llm_call(
-                    agent_id, prompt, system_prompt, provider, model
-                )
+                response = await self._do_llm_call(agent_id, prompt, system_prompt, provider, model)
 
             # Optional tool execution loop (ReAct-style)
             if self.tools is not None:
@@ -248,6 +247,7 @@ class AgentExecutor:
         Returns (tool_name, arguments) or None if no tool call detected.
         """
         import re
+
         # Try to find JSON block
         json_match = re.search(r'\{.*["\']tool["\'].*\}', response, re.DOTALL)
         if not json_match:

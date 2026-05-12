@@ -28,7 +28,8 @@ class Parallelizer:
         """
         completed = {s.id for s in self.plan.list_steps() if s.status == StepStatus.COMPLETED}
         ready = [
-            s for s in self.plan.list_steps()
+            s
+            for s in self.plan.list_steps()
             if s.status == StepStatus.PENDING and all(d in completed for d in s.dependencies)
         ]
         # Group by independence: two steps are independent if neither depends on the other

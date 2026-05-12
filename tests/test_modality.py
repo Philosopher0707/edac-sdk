@@ -39,7 +39,9 @@ class TestCodeAdapter:
 
     def test_validate(self):
         adapter = CodeAdapter()
-        valid = ModalityContent(modality=ModalityType.CODE, data="x=1", metadata={"language": "python"}, mime_type="")
+        valid = ModalityContent(
+            modality=ModalityType.CODE, data="x=1", metadata={"language": "python"}, mime_type=""
+        )
         assert adapter.validate(valid)
         invalid = ModalityContent(modality=ModalityType.CODE, data="x=1", metadata={}, mime_type="")
         assert not adapter.validate(invalid)
@@ -93,7 +95,14 @@ class TestArtifactAdapter:
 
     def test_validate(self):
         adapter = ArtifactAdapter()
-        valid = ModalityContent(modality=ModalityType.ARTIFACT, data="x", metadata={"mime_type": "application/pdf"}, mime_type="")
+        valid = ModalityContent(
+            modality=ModalityType.ARTIFACT,
+            data="x",
+            metadata={"mime_type": "application/pdf"},
+            mime_type="",
+        )
         assert adapter.validate(valid)
-        invalid = ModalityContent(modality=ModalityType.ARTIFACT, data="x", metadata={}, mime_type="")
+        invalid = ModalityContent(
+            modality=ModalityType.ARTIFACT, data="x", metadata={}, mime_type=""
+        )
         assert not adapter.validate(invalid)

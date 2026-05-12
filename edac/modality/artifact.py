@@ -19,7 +19,9 @@ class ArtifactAdapter(ModalityAdapter):
     def validate(self, content: ModalityContent) -> bool:
         return "mime_type" in content.metadata
 
-    def encode(self, raw: Any, mime_type: str = "application/octet-stream", size_bytes: int = 0) -> ModalityContent:
+    def encode(
+        self, raw: Any, mime_type: str = "application/octet-stream", size_bytes: int = 0
+    ) -> ModalityContent:
         return ModalityContent(
             modality=ModalityType.ARTIFACT,
             data=str(raw),

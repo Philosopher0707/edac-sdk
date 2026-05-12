@@ -3,6 +3,7 @@
 Covers LongTerm/Working/Episodic retrieval via the FastAPI
 memory_router, plus ContextManager memory integration.
 """
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -186,4 +187,3 @@ class TestMemoryEndpoints:
         assert "active_windows" in data
         assert "long_term_entries" in data
         assert "episodic_entries" in data
-

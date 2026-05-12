@@ -34,6 +34,7 @@ logger = logging.getLogger("edac.tool.skill")
 @dataclass
 class Skill:
     """A loaded skill with metadata and body."""
+
     name: str
     description: str
     applies_when: str

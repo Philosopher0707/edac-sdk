@@ -21,12 +21,14 @@ logger = logging.getLogger("edac.agent.registry")
 # Agent Card (A2A-compatible)
 # ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AgentCard:
     """A2A-compatible agent metadata card.
 
     See: https://github.com/google/A2A
     """
+
     name: str
     description: str
     version: str = "1.0"
@@ -69,6 +71,7 @@ class AgentCard:
 # ──────────────────────────────────────────────────────────────
 # Registry
 # ──────────────────────────────────────────────────────────────
+
 
 class AgentRegistry:
     """Central registry for agent discovery and capability lookup."""

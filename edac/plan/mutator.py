@@ -42,7 +42,9 @@ class PlanMutator:
         # (to preserve execution order)
         new_ids = {s.id for s in new_steps}
         for step in self.plan.list_steps():
-            if anchor_id in step.dependencies and not any(d != anchor_id for d in step.dependencies):
+            if anchor_id in step.dependencies and not any(
+                d != anchor_id for d in step.dependencies
+            ):
                 step.dependencies.extend(new_ids)
 
         for s in new_steps:

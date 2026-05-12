@@ -181,17 +181,19 @@ class TestPostgresTaskStore:
         from edac.server.store import PostgresTaskStore
 
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={
-            "id": "t1",
-            "status": "pending",
-            "goal": "G1",
-            "pattern": "pipeline",
-            "agents": "[]",
-            "result": None,
-            "error": None,
-            "created_at": "2024-01-01",
-            "updated_at": "2024-01-01",
-        })
+        mock_conn.fetchrow = AsyncMock(
+            return_value={
+                "id": "t1",
+                "status": "pending",
+                "goal": "G1",
+                "pattern": "pipeline",
+                "agents": "[]",
+                "result": None,
+                "error": None,
+                "created_at": "2024-01-01",
+                "updated_at": "2024-01-01",
+            }
+        )
         mock_pool = AsyncMock()
         mock_pool.acquire = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -210,17 +212,21 @@ class TestPostgresTaskStore:
         from edac.server.store import PostgresTaskStore
 
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[{
-            "id": "t1",
-            "status": "completed",
-            "goal": "G1",
-            "pattern": "pipeline",
-            "agents": "[{\"name\": \"a\"}]",
-            "result": "{\"ok\": true}",
-            "error": None,
-            "created_at": "2024-01-01",
-            "updated_at": "2024-01-01",
-        }])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "t1",
+                    "status": "completed",
+                    "goal": "G1",
+                    "pattern": "pipeline",
+                    "agents": '[{"name": "a"}]',
+                    "result": '{"ok": true}',
+                    "error": None,
+                    "created_at": "2024-01-01",
+                    "updated_at": "2024-01-01",
+                }
+            ]
+        )
         mock_pool = AsyncMock()
         mock_pool.acquire = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -240,18 +246,20 @@ class TestPostgresTaskStore:
         from edac.server.store import PostgresTaskStore
 
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={
-            "id": "t1",
-            "status": "failed",
-            "goal": "G1",
-            "pattern": "pipeline",
-            "agents": "[]",
-            "result": None,
-            "error": "boom",
-            "created_at": "2024-01-01",
-            "updated_at": "2024-01-01",
-            "retry_count": 0,
-        })
+        mock_conn.fetchrow = AsyncMock(
+            return_value={
+                "id": "t1",
+                "status": "failed",
+                "goal": "G1",
+                "pattern": "pipeline",
+                "agents": "[]",
+                "result": None,
+                "error": "boom",
+                "created_at": "2024-01-01",
+                "updated_at": "2024-01-01",
+                "retry_count": 0,
+            }
+        )
         mock_conn.execute = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_pool = AsyncMock()

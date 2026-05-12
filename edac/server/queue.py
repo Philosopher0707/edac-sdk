@@ -24,24 +24,19 @@ class TaskQueue(ABC, Generic[T]):
     """Abstract task queue."""
 
     @abstractmethod
-    async def put(self, item: T) -> None:
-        ...
+    async def put(self, item: T) -> None: ...
 
     @abstractmethod
-    async def get(self) -> T:
-        ...
+    async def get(self) -> T: ...
 
     @abstractmethod
-    def task_done(self) -> None:
-        ...
+    def task_done(self) -> None: ...
 
     @abstractmethod
-    def qsize(self) -> int:
-        ...
+    def qsize(self) -> int: ...
 
     @abstractmethod
-    async def join(self) -> None:
-        ...
+    async def join(self) -> None: ...
 
 
 class AsyncioTaskQueue(TaskQueue[T]):
@@ -92,8 +87,7 @@ class RedisTaskQueue(TaskQueue[T]):
                 import redis.asyncio as aioredis
             except ImportError as e:
                 raise RuntimeError(
-                    "redis package required for Redis queue. "
-                    "Install: pip install redis"
+                    "redis package required for Redis queue. Install: pip install redis"
                 ) from e
             self._redis = await aioredis.from_url(self.redis_url, decode_responses=True)
         return self._redis

@@ -55,6 +55,7 @@ def agent(
         if auto_register:
             # Deferred import avoids circular dependencies during type-checking
             from edac.agent.handler_registry import HandlerRegistry  # noqa: F811
+
             HandlerRegistry.get_default().register(name, func)
         return func
 
@@ -79,7 +80,13 @@ def skill(
         if path:
             s = SkillLoader().load(Path(path))
         elif name:
-            s = SkillBuilder().name(name).description(description).applies_when(applies_when).build()
+            s = (
+                SkillBuilder()
+                .name(name)
+                .description(description)
+                .applies_when(applies_when)
+                .build()
+            )
         else:
             raise ValueError("skill decorator requires path or name")
         func._edac_skill = s  # type: ignore[attr-defined]

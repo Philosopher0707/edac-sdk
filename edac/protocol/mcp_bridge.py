@@ -41,13 +41,17 @@ class MCPBridge:
         """Execute a tool via the registry and return a JSON-RPC result."""
         try:
             result = await self.registry.execute(name, arguments)
-            return json.dumps({
-                "content": [{"type": "text", "text": str(result)}],
-                "isError": False,
-            })
+            return json.dumps(
+                {
+                    "content": [{"type": "text", "text": str(result)}],
+                    "isError": False,
+                }
+            )
         except Exception as e:
             logger.error(f"MCP tool call failed for {name}: {e}")
-            return json.dumps({
-                "content": [{"type": "text", "text": f"Error: {e}"}],
-                "isError": True,
-            })
+            return json.dumps(
+                {
+                    "content": [{"type": "text", "text": f"Error: {e}"}],
+                    "isError": True,
+                }
+            )

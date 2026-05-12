@@ -27,9 +27,11 @@ logger = logging.getLogger("edac.agent.lifecycle")
 # Configuration
 # ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AgentConfig:
     """Configuration for an agent instance."""
+
     name: str
     agent_type: str = "generic"
     model: Optional[str] = None
@@ -49,6 +51,7 @@ class AgentConfig:
 # ──────────────────────────────────────────────────────────────
 # Agent Instance
 # ──────────────────────────────────────────────────────────────
+
 
 class AgentInstance:
     """A running agent instance with state, health tracking, and lifecycle hooks."""
@@ -149,6 +152,7 @@ class AgentInstance:
 # Spawner
 # ──────────────────────────────────────────────────────────────
 
+
 class AgentSpawner(ABC):
     """Abstract agent spawner. Subclasses provide concrete creation logic."""
 
@@ -212,7 +216,9 @@ class RegistryAwareSpawner(DefaultAgentSpawner):
         super().__init__(default_factory)
         self.registry = registry
 
-    def _resolve_factory(self, config: AgentConfig) -> Callable[[AgentInstance], Coroutine[Any, Any, None]]:
+    def _resolve_factory(
+        self, config: AgentConfig
+    ) -> Callable[[AgentInstance], Coroutine[Any, Any, None]]:
         factory = self.registry.get(config.name)
         if factory is not None:
             return factory
@@ -233,6 +239,7 @@ class RegistryAwareSpawner(DefaultAgentSpawner):
 # ──────────────────────────────────────────────────────────────
 # Health Monitor
 # ──────────────────────────────────────────────────────────────
+
 
 class HealthMonitor:
     """Watches agent heartbeats and detects stalled/crashed agents."""
@@ -282,10 +289,7 @@ class HealthMonitor:
         while self._running:
             await asyncio.sleep(self.check_interval)
             now = time.time()
-            unhealthy = [
-                a for a in list(self._agents.values())
-                if not a.is_healthy(now)
-            ]
+            unhealthy = [a for a in list(self._agents.values()) if not a.is_healthy(now)]
             for agent in unhealthy:
                 logger.warning(f"Agent {agent.agent_id} unhealthy (state={agent.state.value})")
                 if self.on_unhealthy:
@@ -298,6 +302,7 @@ class HealthMonitor:
 # ──────────────────────────────────────────────────────────────
 # Supervisor
 # ──────────────────────────────────────────────────────────────
+
 
 class Supervisor:
     """Manages parent-child relationships and cascading cancellation."""

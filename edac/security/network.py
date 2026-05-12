@@ -11,7 +11,9 @@ logger = logging.getLogger("edac.security.network")
 class NetworkProxy:
     """Proxy with domain ACL for sandboxed network access."""
 
-    def __init__(self, allowlist: Optional[List[str]] = None, blocklist: Optional[List[str]] = None) -> None:
+    def __init__(
+        self, allowlist: Optional[List[str]] = None, blocklist: Optional[List[str]] = None
+    ) -> None:
         self.allowlist: Set[str] = set(allowlist or [])
         self.blocklist: Set[str] = set(blocklist or [])
 

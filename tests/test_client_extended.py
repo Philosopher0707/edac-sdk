@@ -447,7 +447,9 @@ class TestRequestIdInErrors:
         assert str(exc) == "not found"
 
     def test_retry_exhausted_inherits_request_id(self):
-        exc = EdacRetryExhausted("all retries failed", last_status_code=503, attempts=3, request_id="retry99")
+        exc = EdacRetryExhausted(
+            "all retries failed", last_status_code=503, attempts=3, request_id="retry99"
+        )
         assert exc.request_id == "retry99"
         assert exc.attempts == 3
 
@@ -463,6 +465,7 @@ class TestRequestIdInErrors:
         @app.get("/test-404")
         async def test_404():
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail="Not here")
 
         with TestClient(app) as client:
@@ -512,10 +515,10 @@ class TestRequestLogging:
         assert any("-> 200" in msg for msg in debug_logs)
 
 
-
 class TestDocsBuild:
     def test_mkdocs_builds(self):
         import subprocess
+
         result = subprocess.run(
             ["mkdocs", "build", "--strict"],
             capture_output=True,

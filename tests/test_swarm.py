@@ -114,6 +114,7 @@ class TestSwarmInvalidPattern:
             pattern="unknown",
         )
         import asyncio
+
         with pytest.raises(ValueError):
             asyncio.run(swarm.execute(goal="x"))
 
@@ -128,6 +129,7 @@ class TestSwarmStepStatus:
     @pytest.mark.asyncio
     async def test_pipeline_step_status_is_enum(self):
         from edac.plan.dag import StepStatus
+
         bus = EventBus()
         async with bus:
             async with AgentRuntime(bus) as runtime:

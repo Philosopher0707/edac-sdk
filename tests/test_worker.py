@@ -53,9 +53,7 @@ class TestTaskWorkerRetry:
         await store.connect()
 
         executor = AsyncMock(spec=AgentExecutor)
-        executor.execute = AsyncMock(
-            side_effect=RuntimeError("boom")
-        )
+        executor.execute = AsyncMock(side_effect=RuntimeError("boom"))
 
         worker = TaskWorker(
             store=store,

@@ -21,6 +21,7 @@ logger = logging.getLogger("edac.tool.sandbox")
 @dataclass
 class SandboxConfig:
     """Configuration for sandboxed execution."""
+
     allow_network: bool = False
     allow_filesystem: bool = True
     read_only_paths: List[str] = None
@@ -43,6 +44,7 @@ class SandboxConfig:
 @dataclass
 class SandboxResult:
     """Result of sandboxed execution."""
+
     stdout: str
     stderr: str
     returncode: int
@@ -126,6 +128,7 @@ class Sandbox:
             if not cwd and self._temp_dir and self.config.cleanup_temp_dir:
                 try:
                     import shutil
+
                     shutil.rmtree(self._temp_dir, ignore_errors=True)
                     self._temp_dir = None
                 except Exception:
@@ -139,6 +142,7 @@ class Sandbox:
     def cleanup(self) -> None:
         if self._temp_dir and self._temp_dir.exists():
             import shutil
+
             shutil.rmtree(self._temp_dir, ignore_errors=True)
             self._temp_dir = None
 

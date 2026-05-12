@@ -32,6 +32,7 @@ class HITLState(str, Enum):
 @dataclass
 class HITLTask:
     """A task tracked through the HITL state machine."""
+
     task_id: str
     goal: str
     state: HITLState = HITLState.SUBMITTED
@@ -43,7 +44,9 @@ class HITLTask:
 class HITLStateMachine:
     """Manages HITL tasks and state transitions."""
 
-    def __init__(self, on_state_change: Optional[Callable[[HITLTask], Coroutine[Any, Any, None]]] = None):
+    def __init__(
+        self, on_state_change: Optional[Callable[[HITLTask], Coroutine[Any, Any, None]]] = None
+    ):
         self._tasks: Dict[str, HITLTask] = {}
         self._handlers: Dict[str, asyncio.Event] = {}
         self.on_state_change = on_state_change
@@ -74,7 +77,9 @@ class HITLStateMachine:
             asyncio.create_task(self.on_state_change(task))
         return task
 
-    async def request_input(self, task_id: str, prompt: str, timeout: Optional[float] = None) -> Optional[str]:
+    async def request_input(
+        self, task_id: str, prompt: str, timeout: Optional[float] = None
+    ) -> Optional[str]:
         """Block until human provides input."""
         task = self._tasks.get(task_id)
         if task is None:

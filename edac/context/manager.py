@@ -29,6 +29,7 @@ logger = logging.getLogger("edac.context.manager")
 @dataclass
 class ContextConfig:
     """Configuration for context management."""
+
     max_tokens_per_agent: int = 128000
     max_tokens_per_session: int = 512000
     max_tokens_per_plan: int = 256000
@@ -248,7 +249,9 @@ class ContextManager:
             total = usage or 0
         self._budget.consume(agent_id, total)
         if self.metrics:
-            self.metrics.counter("llm_tokens_total", labels={"provider": prov_name, "model": model or "unknown"}).inc(total)
+            self.metrics.counter(
+                "llm_tokens_total", labels={"provider": prov_name, "model": model or "unknown"}
+            ).inc(total)
 
         # Store response in window
         self.add_to_window(agent_id, "assistant", completion.content, total)

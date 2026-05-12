@@ -65,10 +65,10 @@ class VectorClock:
         """
         nodes = set(self._clock.keys()) | set(other._clock.keys())
 
-        all_self_le = True   # self <= other (all entries)
+        all_self_le = True  # self <= other (all entries)
         all_other_le = True  # other <= self (all entries)
         any_self_lt = False  # self < other (at least one strict)
-        any_other_lt = False # other < self (at least one strict)
+        any_other_lt = False  # other < self (at least one strict)
 
         for node in nodes:
             s = self._clock.get(node, 0)
@@ -83,10 +83,10 @@ class VectorClock:
         if any_self_lt and not any_other_lt and all_other_le:
             return -2  # self strictly before other
         if any_other_lt and not any_self_lt and all_self_le:
-            return 2   # self strictly after other
+            return 2  # self strictly after other
         if not any_self_lt and not any_other_lt:
-            return 0   # equal
-        return 1       # concurrent
+            return 0  # equal
+        return 1  # concurrent
 
     def happens_before(self, other: "VectorClock") -> bool:
         """Return True if self strictly happens-before other."""

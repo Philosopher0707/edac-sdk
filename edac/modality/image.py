@@ -19,7 +19,9 @@ class ImageAdapter(ModalityAdapter):
     def validate(self, content: ModalityContent) -> bool:
         return isinstance(content.data, (str, bytes))
 
-    def encode(self, raw: Any, width: int = 0, height: int = 0, fmt: str = "png") -> ModalityContent:
+    def encode(
+        self, raw: Any, width: int = 0, height: int = 0, fmt: str = "png"
+    ) -> ModalityContent:
         if isinstance(raw, bytes):
             data = base64.b64encode(raw).decode("ascii")
         else:

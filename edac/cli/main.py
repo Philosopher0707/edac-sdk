@@ -77,7 +77,13 @@ cli.add_command(chat)
 @click.option("--workers", type=int, default=None, help="Number of workers")
 @click.option("--reload", is_flag=True, help="Enable auto-reload")
 @click.pass_context
-def serve(ctx: click.Context, host: Optional[str], port: Optional[int], workers: Optional[int], reload: bool) -> None:
+def serve(
+    ctx: click.Context,
+    host: Optional[str],
+    port: Optional[int],
+    workers: Optional[int],
+    reload: bool,
+) -> None:
     """Start the EDAC production server."""
     cfg: ServerConfig = ctx.obj["config"]
 

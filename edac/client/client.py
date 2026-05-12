@@ -103,7 +103,11 @@ class EdacClient:
 
         detail = payload.get("detail", "Unknown error")
         request_id = payload.get("request_id") or response.headers.get("x-request-id")
-        kwargs = {"status_code": response.status_code, "response": payload, "request_id": request_id}
+        kwargs = {
+            "status_code": response.status_code,
+            "response": payload,
+            "request_id": request_id,
+        }
         if response.status_code == 404:
             raise EdacNotFoundError(detail, **kwargs)
         if response.status_code in (401, 403):
@@ -134,18 +138,26 @@ class EdacClient:
                         method, path, params=params, json=json, **kwargs
                     )
                 logger.debug(
-                    '%s %s -> %d (%.1f ms)',
-                    method, path, response.status_code, (time.monotonic() - t0) * 1000
+                    "%s %s -> %d (%.1f ms)",
+                    method,
+                    path,
+                    response.status_code,
+                    (time.monotonic() - t0) * 1000,
                 )
                 return response
             except BaseException as exc:
                 last_exc = exc
                 if attempt == self._retry.max_retries or not _should_retry(exc, self._retry):
                     raise
-                wait = min(self._retry.backoff_base * (2 ** attempt), self._retry.backoff_max)
+                wait = min(self._retry.backoff_base * (2**attempt), self._retry.backoff_max)
                 logger.debug(
                     "Retrying %s %s in %.2fs (attempt %d/%d): %s",
-                    method, path, wait, attempt + 1, self._retry.max_retries, exc,
+                    method,
+                    path,
+                    wait,
+                    attempt + 1,
+                    self._retry.max_retries,
+                    exc,
                 )
                 await asyncio.sleep(wait)
 
@@ -363,7 +375,7 @@ class EdacClient:
                     elif line.startswith("id: "):
                         # event id line
                         pass
-        except (_RETRY_NETWORK_ERRORS + (EdacAPIError,)) as exc:
+        except _RETRY_NETWORK_ERRORS + (EdacAPIError,) as exc:
             raise EdacStreamError(f"SSE stream failed: {exc}") from exc
 
     # ── WebSocket ──

@@ -25,11 +25,13 @@ class SSEBridge:
         """Yield SSE-formatted events from the bus."""
         async with self.bus.stream(topics=topics) as events:
             async for event in events:
-                data = json.dumps({
-                    "event_type": event.event_type.value,
-                    "source": event.source,
-                    "topic": event.topic,
-                    "payload": event.payload,
-                    "timestamp": event.timestamp.isoformat(),
-                })
+                data = json.dumps(
+                    {
+                        "event_type": event.event_type.value,
+                        "source": event.source,
+                        "topic": event.topic,
+                        "payload": event.payload,
+                        "timestamp": event.timestamp.isoformat(),
+                    }
+                )
                 yield f"data: {data}\n\n"

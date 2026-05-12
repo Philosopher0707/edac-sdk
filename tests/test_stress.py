@@ -45,13 +45,16 @@ class TestConcurrencyStress:
         bus.subscribe(handler)
 
         async with bus:
+
             async def emit_one(i: int):
-                await bus.emit(create_event(
-                    event_type=EventType.SYSTEM_LOG,
-                    source="system:stress",
-                    topic="stress.concurrent",
-                    payload={"i": i},
-                ))
+                await bus.emit(
+                    create_event(
+                        event_type=EventType.SYSTEM_LOG,
+                        source="system:stress",
+                        topic="stress.concurrent",
+                        payload={"i": i},
+                    )
+                )
 
             await asyncio.gather(*[emit_one(i) for i in range(100)])
             await asyncio.sleep(0.2)  # drain
@@ -109,7 +112,7 @@ class TestLargeDataStructures:
         """DAG with 500 steps resolves without recursion error."""
         dag = PlanDAG(goal="Massive DAG")
         for i in range(500):
-            deps = [f"step_{i-1}"] if i > 0 else []
+            deps = [f"step_{i - 1}"] if i > 0 else []
             dag.add_step(Step(id=f"step_{i}", description="work", action="noop", dependencies=deps))
 
         order = dag.topological_order()
@@ -123,7 +126,14 @@ class TestLargeDataStructures:
         dag = PlanDAG(goal="Wide DAG")
         for i in range(100):
             dag.add_step(Step(id=f"independent_{i}", description="work", action="noop"))
-        dag.add_step(Step(id="merge", description="collect", action="noop", dependencies=[f"independent_{i}" for i in range(100)]))
+        dag.add_step(
+            Step(
+                id="merge",
+                description="collect",
+                action="noop",
+                dependencies=[f"independent_{i}" for i in range(100)],
+            )
+        )
 
         groups = dag.parallel_groups()
         # First group: 100 independent steps. Second group: merge step.
@@ -179,7 +189,9 @@ class TestVectorClockStress:
 
         # All later events should happen_after or be concurrent with earlier ones
         for i in range(1, 100):
-            assert events[i].happens_after(events[i - 1]) or events[i].concurrent_with(events[i - 1])
+            assert events[i].happens_after(events[i - 1]) or events[i].concurrent_with(
+                events[i - 1]
+            )
 
 
 class TestTracerStress:

@@ -45,13 +45,13 @@ EventFilter = Callable[[Event], bool]
 class Subscriber(Protocol):
     """Protocol for event subscribers."""
 
-    async def on_event(self, event: Event) -> None:
-        ...
+    async def on_event(self, event: Event) -> None: ...
 
 
 # ---------------------------------------------------------------------------
 # Subscription
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Subscription:
@@ -105,6 +105,7 @@ class Subscription:
 # ---------------------------------------------------------------------------
 # Routing Table
 # ---------------------------------------------------------------------------
+
 
 class RoutingTable:
     """Efficient topic-to-subscriber lookup.
@@ -176,6 +177,7 @@ class RoutingTable:
 # Priority Queue for Events
 # ---------------------------------------------------------------------------
 
+
 @dataclass(order=True)
 class PrioritizedEvent:
     """Event wrapper for priority queue ordering.
@@ -228,7 +230,9 @@ class PriorityEventQueue:
                 if self._heap and event.priority < self._heap[-1].priority:
                     dropped = heapq.heappop(self._heap)
                     self._size_by_priority[dropped.priority] -= 1
-                    logger.debug(f"Dropped low-priority event to make room: {dropped.event.event_id}")
+                    logger.debug(
+                        f"Dropped low-priority event to make room: {dropped.event.event_id}"
+                    )
                 else:
                     logger.warning(f"Queue full, dropping event: {event.event_id}")
                     return False
@@ -280,6 +284,7 @@ class PriorityEventQueue:
 
 class QueueFull(Exception):
     """Raised when event queue is at capacity."""
+
     pass
 
 
@@ -287,9 +292,11 @@ class QueueFull(Exception):
 # Config / Rule / Matcher / Stats (for __init__ exports)
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class RouterConfig:
     """Configuration for the event router."""
+
     default_priority: EventPriority = EventPriority.NORMAL
     max_queue_size: int = 10000
     backpressure: str = "drop_low_priority"
@@ -298,6 +305,7 @@ class RouterConfig:
 @dataclass(frozen=True)
 class RouteRule:
     """A routing rule for topic transformation or forwarding."""
+
     source_pattern: str
     target_topic: str
     transform: Optional[Callable[[Event], Event]] = None
@@ -332,6 +340,7 @@ class RoutingStats:
 # ---------------------------------------------------------------------------
 # Event Router
 # ---------------------------------------------------------------------------
+
 
 class EventRouter:
     """Central event router with topic-based pub/sub.
@@ -439,6 +448,7 @@ class EventRouter:
 # Convenience Decorator
 # ---------------------------------------------------------------------------
 
+
 def on(
     topic_pattern: str,
     filter: Optional[EventFilter] = None,
@@ -455,6 +465,7 @@ def on(
         async def handle_steps(event: Event) -> None:
             print(f"Step event: {event.event_type}")
     """
+
     def decorator(func: EventHandler) -> EventHandler:
         # Store metadata on function for later registration
         func._edac_subscription = {  # type: ignore

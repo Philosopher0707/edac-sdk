@@ -66,9 +66,7 @@ async def list_agents(
 
     if user and not app.state.auth.is_allowed(user, ACTION_LIST_AGENTS):
         log_audit(ACTION_LIST_AGENTS, "/agents", "denied", user=user.name)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     runtime: AgentRuntime = app.state.runtime
     all_agents = runtime.list_agents()
@@ -82,6 +80,7 @@ async def list_agents(
         user=getattr(user, "name", None),
     )
     from fastapi.responses import JSONResponse
+
     return JSONResponse(
         content=[_to_info(a).model_dump() for a in paginated],
         headers={
@@ -103,9 +102,7 @@ async def create_agent(
 
     if user and not app.state.auth.is_allowed(user, ACTION_CREATE_AGENT):
         log_audit(ACTION_CREATE_AGENT, "/agents", "denied", user=user.name)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     runtime: AgentRuntime = app.state.runtime
     config = AgentConfig(
@@ -222,9 +219,7 @@ async def get_agent(agent_id: str, request: Request) -> AgentInfo:
 
     if user and not app.state.auth.is_allowed(user, ACTION_GET_AGENT):
         log_audit(ACTION_GET_AGENT, f"/agents/{agent_id}", "denied", user=user.name)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     runtime: AgentRuntime = app.state.runtime
     agent = runtime.get_agent(agent_id)
@@ -250,9 +245,7 @@ async def delete_agent(agent_id: str, request: Request) -> Dict[str, str]:
 
     if user and not app.state.auth.is_allowed(user, ACTION_DELETE_AGENT):
         log_audit(ACTION_DELETE_AGENT, f"/agents/{agent_id}", "denied", user=user.name)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     runtime: AgentRuntime = app.state.runtime
     agent = runtime.get_agent(agent_id)
@@ -279,12 +272,8 @@ async def restart_agent(agent_id: str, request: Request) -> AgentInfo:
     user = getattr(request.state, "user", None)
 
     if user and not app.state.auth.is_allowed(user, ACTION_RESTART_AGENT):
-        log_audit(
-            ACTION_RESTART_AGENT, f"/agents/{agent_id}", "denied", user=user.name
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
-        )
+        log_audit(ACTION_RESTART_AGENT, f"/agents/{agent_id}", "denied", user=user.name)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     runtime: AgentRuntime = app.state.runtime
     agent = runtime.get_agent(agent_id)
@@ -318,9 +307,7 @@ async def pause_agent(agent_id: str, request: Request) -> AgentInfo:
 
     if user and not app.state.auth.is_allowed(user, ACTION_PAUSE_AGENT):
         log_audit(ACTION_PAUSE_AGENT, f"/agents/{agent_id}", "denied", user=user.name)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     runtime: AgentRuntime = app.state.runtime
     agent = runtime.get_agent(agent_id)
@@ -349,12 +336,8 @@ async def resume_agent(agent_id: str, request: Request) -> AgentInfo:
     user = getattr(request.state, "user", None)
 
     if user and not app.state.auth.is_allowed(user, ACTION_RESUME_AGENT):
-        log_audit(
-            ACTION_RESUME_AGENT, f"/agents/{agent_id}", "denied", user=user.name
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
-        )
+        log_audit(ACTION_RESUME_AGENT, f"/agents/{agent_id}", "denied", user=user.name)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     runtime: AgentRuntime = app.state.runtime
     agent = runtime.get_agent(agent_id)
@@ -374,6 +357,7 @@ async def resume_agent(agent_id: str, request: Request) -> AgentInfo:
         user=getattr(user, "name", None),
     )
     return _to_info(agent)
+
 
 # ── Templates (user-defined agents) ───────────────────────────────────────
 
