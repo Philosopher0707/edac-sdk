@@ -137,15 +137,16 @@ CHAT_TOOLS = [
 
 def register_chat_tools(tool_registry: Any) -> int:
     """Register all chat tools into a ToolRegistry. Returns count."""
+    from edac.tool.registry import ToolSpec
     count = 0
     for entry in CHAT_TOOLS:
         try:
-            tool_registry.register(
+            spec = ToolSpec(
                 name=entry["name"],
-                handler=entry["handler"],
                 description=entry["description"],
                 parameters=entry["parameters"],
             )
+            tool_registry.register(spec, entry["handler"], source="builtin")
             count += 1
         except Exception:
             pass

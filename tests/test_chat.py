@@ -340,3 +340,131 @@ class TestSqliteChatStore:
         assert msgs[1].role == "assistant"
 
         await store2.close()
+
+# ── Track B: Tool Calling Tests ──
+
+
+class TestChatToolCalling:
+    """Tests for tool detection and execution in the chat send endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_tool_call_detected_and_executed(self):
+        """When LLM returns a tool call, the handler executes it and feeds result back."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from fastapi.testclient import TestClient
+        from edac.server.api import create_app
+        from edac.server.config import ServerConfig
+
+        cfg = ServerConfig(database_url="sqlite+aiosqlite:///:memory:", api_key=None)
+        app = create_app(config=cfg)
+
+        with TestClient(app) as client:
+            # Create session
+            resp = client.post(
+                "/chat/sessions",
+                json={"model": "kimi-k2.6:cloud", "provider": "ollama"},
+            )
+            assert resp.status_code == 201
+            sid = resp.json()["session_id"]
+
+            # First LLM call returns a tool-call request, second returns final answer
+            tool_call_response = MagicMock()
+            tool_call_response.content = (
+                '{"tool": "edac_health", "arguments": {}}'
+            )
+            final_response = MagicMock()
+            final_response.content = "The server is healthy!"
+
+            mock_prov = AsyncMock()
+            mock_prov.chat = AsyncMock(
+                side_effect=[tool_call_response, final_response]
+            )
+
+            with patch.object(app.state.registry, "get", return_value=mock_prov):
+                resp2 = client.post(
+                    f"/chat/sessions/{sid}/send",
+                    json={"message": "check health"},
+                )
+                assert resp2.status_code == 200
+                data = resp2.json()
+                # Should include assistant response, tool record, and final answer
+                roles = [m["role"] for m in data]
+                assert "tool" in roles, f"Expected 'tool' role in {roles}"
+                assert (
+                    roles.count("assistant") >= 2
+                ), f"Expected at least 2 assistant messages in {roles}"
+
+    @pytest.mark.asyncio
+    async def test_tool_call_unknown_tool_skipped(self):
+        """Tool calls for unknown/non-existent tools are skipped gracefully."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from fastapi.testclient import TestClient
+        from edac.server.api import create_app
+        from edac.server.config import ServerConfig
+
+        cfg = ServerConfig(database_url="sqlite+aiosqlite:///:memory:", api_key=None)
+        app = create_app(config=cfg)
+
+        with TestClient(app) as client:
+            resp = client.post(
+                "/chat/sessions",
+                json={"model": "kimi-k2.6:cloud", "provider": "ollama"},
+            )
+            assert resp.status_code == 201
+            sid = resp.json()["session_id"]
+
+            # LLM returns a tool call for an unknown tool
+            unknown_tool = MagicMock()
+            unknown_tool.content = (
+                '{"tool": "nonexistent_tool", "arguments": {"x": 1}}'
+            )
+
+            mock_prov = AsyncMock()
+            mock_prov.chat = AsyncMock(return_value=unknown_tool)
+
+            with patch.object(app.state.registry, "get", return_value=mock_prov):
+                resp2 = client.post(
+                    f"/chat/sessions/{sid}/send",
+                    json={"message": "run unknown"},
+                )
+                assert resp2.status_code == 200
+                data = resp2.json()
+                # No tool messages since the tool wasn't found
+                roles = [m["role"] for m in data]
+                assert "tool" not in roles
+
+    @pytest.mark.asyncio
+    async def test_no_tool_call_in_response_passes_through(self):
+        """Normal LLM responses without tool calls are returned unchanged."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from fastapi.testclient import TestClient
+        from edac.server.api import create_app
+        from edac.server.config import ServerConfig
+
+        cfg = ServerConfig(database_url="sqlite+aiosqlite:///:memory:", api_key=None)
+        app = create_app(config=cfg)
+
+        with TestClient(app) as client:
+            resp = client.post(
+                "/chat/sessions",
+                json={"model": "kimi-k2.6:cloud", "provider": "ollama"},
+            )
+            assert resp.status_code == 201
+            sid = resp.json()["session_id"]
+
+            normal = MagicMock()
+            normal.content = "Hello! How can I help you today?"
+
+            mock_prov = AsyncMock()
+            mock_prov.chat = AsyncMock(return_value=normal)
+
+            with patch.object(app.state.registry, "get", return_value=mock_prov):
+                resp2 = client.post(
+                    f"/chat/sessions/{sid}/send",
+                    json={"message": "hi"},
+                )
+                assert resp2.status_code == 200
+                data = resp2.json()
+                roles = [m["role"] for m in data]
+                assert "tool" not in roles
+                assert roles == ["user", "assistant"]

@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -290,10 +291,55 @@ async def send_message(
         )
 
     # Store assistant response
-    store.add_message(session_id, "assistant", completion.content)
-    ctx.add_to_window(session_id, "assistant", completion.content)
+    full_content = completion.content
+    store.add_message(session_id, "assistant", full_content)
+    ctx.add_to_window(session_id, "assistant", full_content)
 
-    # Return the turn (user msg + assistant response)
+    # ── Track B: Tool-calling loop ──
+    tool_registry = getattr(request.app.state, "tool_registry", None)
+    for _ in range(3):  # Max 3 tool calls per turn
+        json_match = re.search(r'\{.*"tool".*\}', full_content, re.DOTALL)
+        if not json_match:
+            json_match = re.search(r'\{.*"function".*\}', full_content, re.DOTALL)
+        if not json_match:
+            break
+        try:
+            tool_data = json.loads(json_match.group())
+            tool_name = tool_data.get("tool") or tool_data.get("function") or tool_data.get("name")
+            tool_args = tool_data.get("arguments") or tool_data.get("args") or tool_data.get("parameters") or tool_data.get("input") or {}
+            if isinstance(tool_args, str):
+                try:
+                    tool_args = json.loads(tool_args)
+                except json.JSONDecodeError:
+                    tool_args = {"input": tool_args}
+        except json.JSONDecodeError:
+            break
+        if not tool_name or tool_registry is None or not tool_registry.has(tool_name):
+            break
+        # Execute the tool
+        try:
+            tool_result = await tool_registry.execute(tool_name, tool_args)
+            tool_output = json.dumps(tool_result, default=str)[:1000]
+        except Exception as te:
+            tool_output = f"Tool error: {te}"
+        # Feed tool result back into context
+        store.add_message(session_id, "tool", f"Tool {tool_name}: {tool_output}")
+        ctx.add_to_window(session_id, "tool", f"Tool {tool_name}: {tool_output}")
+        # Re-call model with updated context
+        messages = []
+        for m in store.get_messages(session_id):
+            if m.role in ("system", "user", "assistant", "tool"):
+                messages.append(ChatMessage(role=m.role, content=m.content))
+        try:
+            completion = await prov.chat(messages, model=session.model)
+            full_content = completion.content
+        except Exception as e:
+            logger.error("Tool re-call error for session %s: %s", session_id, e)
+            break
+        store.add_message(session_id, "assistant", full_content)
+        ctx.add_to_window(session_id, "assistant", full_content)
+
+    # Return full history
     history = store.get_messages(session_id)
     return [
         ChatMessageResponse(
@@ -302,7 +348,7 @@ async def send_message(
             timestamp=m.timestamp.isoformat(),
             message_id=m.message_id,
         )
-        for m in history[-2:]
+        for m in history
     ]
 
 
@@ -492,6 +538,69 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                 ctx.add_to_window(session_id, "assistant", full_content[:4000])
 
                 await _safe_send_json(websocket, {"type": "done", "content": full_content[:4000]})
+
+                # ── Track B: Tool-calling loop ──
+                for _ in range(3):  # Max 3 tool calls per turn
+                    json_match = re.search(r'\{.*"tool".*\}', full_content, re.DOTALL)
+                    if not json_match:
+                        json_match = re.search(r'\{.*"function".*\}', full_content, re.DOTALL)
+                    if not json_match:
+                        break
+                    try:
+                        tool_data = json.loads(json_match.group())
+                        tool_name = tool_data.get("tool") or tool_data.get("function") or tool_data.get("name")
+                        tool_args = tool_data.get("arguments") or tool_data.get("args") or tool_data.get("parameters") or tool_data.get("input") or {}
+                        if isinstance(tool_args, str):
+                            try:
+                                tool_args = json.loads(tool_args)
+                            except json.JSONDecodeError:
+                                tool_args = {"input": tool_args}
+                    except json.JSONDecodeError:
+                        break
+                    if not tool_name:
+                        break
+
+                    # Execute the tool
+                    tool_registry = app.state.tool_registry
+                    try:
+                        tool_result = await tool_registry.execute(tool_name, tool_args)
+                        tool_output = json.dumps(tool_result, default=str)[:1000]
+                    except Exception as te:
+                        tool_output = f"Tool error: {te}"
+
+                    await _safe_send_json(websocket, {"type": "tool_call", "tool": tool_name, "result": tool_output[:500]})
+
+                    # Feed tool result back into context
+                    store.add_message(session_id, "tool", f"Tool {tool_name}: {tool_output}")
+                    ctx.add_to_window(session_id, "tool", f"Tool {tool_name}: {tool_output}")
+
+                    # Re-stream with updated context including tool result
+                    messages = []
+                    for m in store.get_messages(session_id):
+                        if m.role in ("system", "user", "assistant", "tool"):
+                            messages.append(ChatMessage(role=m.role, content=m.content[:4000]))
+
+                    content_parts = []
+                    try:
+                        async for chunk in prov.stream(messages, model=session.model):
+                            if chunk.content:
+                                content_parts.append(chunk.content)
+                                await _safe_send_json(websocket, {"type": "token", "text": chunk.content})
+                            if chunk.finish_reason:
+                                break
+                    except asyncio.CancelledError:
+                        logger.info("Tool stream cancelled for session %s", session_id)
+                        raise
+                    except Exception as e:
+                        logger.error("Tool re-stream error for session %s: %s", session_id, e)
+                        await _safe_send_json(websocket, {"type": "error", "message": str(e)[:200]})
+                        break
+
+                    full_content = "".join(content_parts)
+                    store.add_message(session_id, "assistant", full_content[:4000])
+                    ctx.add_to_window(session_id, "assistant", full_content[:4000])
+                    await _safe_send_json(websocket, {"type": "done", "content": full_content[:4000]})
+
 
             elif action == "history":
                 msgs = store.get_messages(session_id)
